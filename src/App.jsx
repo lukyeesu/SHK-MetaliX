@@ -406,14 +406,14 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
   const bills = billingData || [];
 
   const initialFormData = config.bill ? { 
-    ...config.bill, 
-    referenceDate: config.bill.referenceDate || (config.bill.date ? config.bill.date.split('T')[0] : '') 
+    ...config.bill 
   } : {
     id: '', type: 'BUY', 
     date: new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().slice(0, 19), 
     referenceDate: new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().slice(0, 10),
     category: 'ซื้อของเก่า', customerId: '', customerName: '', 
     items: [{ rowId: Date.now(), productId: '', name: '', quantity: '', price: '', unit: 'กก.' }],
+    quotaRefs: [''],
     note: '', grandTotal: 0, status: 'Completed'
   };
 
@@ -432,7 +432,7 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
   const dailyItems = todayPriceList ? (todayPriceList.items || []) : [];
 
   // แยกวันที่: ดึงโควตาอิงจาก "อ้างอิงโควตาวันที่"
-  const quotaDateStr = formData.referenceDate || priceDateStr;
+  const quotaDateStr = priceDateStr;
 
   // --- Quota Calculation Logic ---
   const refLock = (lockData || []).find(l => (l.date || '').startsWith(quotaDateStr));
@@ -1050,7 +1050,7 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {!(formData.items || []).length ? (
-                        <tr><td colSpan="6" className="text-center p-8 text-slate-400 text-[14px]">ไม่มีรายการสินค้า</td></tr>
+                        <tr><td colSpan="7" className="text-center p-8 text-slate-400 text-[14px]">ไม่มีรายการสินค้า</td></tr>
                       ) : (
                         (formData.items || []).filter(item => {
                           if (!modalSearch) return true;
