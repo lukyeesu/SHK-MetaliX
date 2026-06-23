@@ -241,6 +241,34 @@ export default function App() {
         input[type="number"]::-webkit-inner-spin-button,
         input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+        
+        /* สไตล์ปฏิทินที่เข้ากับธีม Sky/Blue และ Emerald */
+        input[type="date"], input[type="datetime-local"] {
+          accent-color: #0ea5e9;
+          transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator,
+        input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+          cursor: pointer;
+          border-radius: 8px;
+          padding: 4px;
+          transition: all 0.2s ease;
+          filter: sepia(100%) saturate(2000%) hue-rotate(170deg) brightness(90%) contrast(95%);
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator:hover,
+        input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+          background-color: rgba(14, 165, 233, 0.1);
+        }
+
+        /* ตกแต่ง dropdowns และฟอร์มทั้งหมดให้โค้งมนสวยงามระดับพรีเมียม */
+        select, input, textarea {
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        select {
+          border-radius: 12px !important;
+          cursor: pointer;
+        }
+
         .sticky-header-bg { transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, backdrop-filter 0.3s ease; border-bottom: 1px solid transparent; background-color: transparent; will-change: background-color, backdrop-filter; }
         .is-scrolled.sticky-header-bg, .is-scrolled .sticky-header-bg { background-color: rgba(255, 255, 255, 0.95); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom-color: transparent; }
         .sticky-header-inner { transition: padding 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding-top: 1.5rem; padding-bottom: 1rem; will-change: padding; }
@@ -646,7 +674,10 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
             </div>
             <div className="space-y-1.5">
               <label className="text-[13px] font-medium text-slate-500">วันที่ทำรายการ (อิงราคา) <span className="text-rose-500">*</span></label>
-              <input disabled={isViewOnly} type="datetime-local" step="1" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="w-full h-[48px] px-4 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50 disabled:text-slate-500" />
+              <div className="relative">
+                <input disabled={isViewOnly} type="datetime-local" step="1" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="w-full h-[48px] pl-4 pr-10 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50 disabled:text-slate-500" />
+                <CalendarClock className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-sky-500 pointer-events-none opacity-80" />
+              </div>
             </div>
             {/* หมวดหมู่ (ย้ายขึ้นมาให้แสดงสำหรับทั้ง BUY และ SELL) */}
             <div className="space-y-1.5 shrink-0">
@@ -836,7 +867,7 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
                 <div key={item.rowId} className="flex flex-col md:flex-row gap-3 items-start md:items-center relative bg-slate-50/50 p-3 rounded-xl border border-slate-100">
                   <div className="w-full md:flex-[2]">
                     <label className="block md:hidden text-[11px] font-bold text-slate-400 mb-1">รายการ</label>
-                    <select disabled={isViewOnly} value={item.productId} onChange={(e) => handleItemChange(item.rowId, 'productId', e.target.value)} className={`w-full h-[40px] px-3 bg-white border border-slate-200 rounded-lg text-[14px] outline-none focus:border-sky-500 transition-all disabled:bg-transparent ${dailyItems.length === 0 && !item.productId ? 'text-rose-500' : 'text-slate-700'}`}>
+                    <select disabled={isViewOnly} value={item.productId} onChange={(e) => handleItemChange(item.rowId, 'productId', e.target.value)} className={`w-full h-[40px] px-3 bg-white border border-slate-200 rounded-[12px] text-[14px] outline-none focus:border-sky-500 transition-all disabled:bg-transparent ${dailyItems.length === 0 && !item.productId ? 'text-rose-500' : 'text-slate-700'}`}>
                       {dailyItems.length > 0 ? <option value="">-- เลือกราคารับซื้อวันนี้ --</option> : <option value="">-- ไม่พบการตั้งราคาวันนี้ --</option>}
                       {dailyItems.map(p => <option key={p.id} value={p.id}>{p.name} ({p.category})</option>)}
                       {item.productId && !dailyItems.some(p => p.id === item.productId) && <option value={item.productId}>{item.name || item.productId} (ข้อมูลเก่า)</option>}
@@ -844,7 +875,7 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
                   </div>
                   <div className="w-full md:flex-[1]">
                     <label className="block md:hidden text-[11px] font-bold text-slate-400 mb-1">จำนวน(kg)</label>
-                    <input disabled={isViewOnly} type="number" value={item.quantity} onChange={(e) => handleItemChange(item.rowId, 'quantity', e.target.value)} className="w-full h-[40px] px-3 bg-white border border-slate-200 rounded-lg text-[14px] text-center font-mono-code outline-none focus:border-sky-500 disabled:bg-transparent" placeholder="0" />
+                    <input disabled={isViewOnly} type="number" value={item.quantity} onChange={(e) => handleItemChange(item.rowId, 'quantity', e.target.value)} className="w-full h-[40px] px-3 bg-white border border-slate-200 rounded-[12px] text-[14px] text-center font-mono-code outline-none focus:border-sky-500 disabled:bg-transparent" placeholder="0" />
                   </div>
                   <div className="w-full md:flex-[1]">
                     <label className="block md:hidden text-[11px] font-bold text-slate-400 mb-1">ราคาต่อหน่วย</label>
@@ -858,7 +889,7 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
                           e.preventDefault(); const prevInput = document.getElementById(`price-input-${index - 1}`); if (prevInput) { prevInput.focus(); prevInput.select(); }
                         }
                       }}
-                      className="w-full h-[40px] px-3 bg-white border border-slate-200 rounded-lg text-[14px] text-right font-mono-code outline-none focus:border-sky-500 disabled:bg-transparent" placeholder="0.00" 
+                      className="w-full h-[40px] px-3 bg-white border border-slate-200 rounded-[12px] text-[14px] text-right font-mono-code outline-none focus:border-sky-500 disabled:bg-transparent" placeholder="0.00" 
                     />
                   </div>
                   <div className="w-full md:flex-[1] text-right md:text-center mt-2 md:mt-0">
@@ -1133,11 +1164,14 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
               <div className="flex flex-col md:flex-row gap-4 shrink-0">
                 <div className="flex-1 space-y-1.5">
                   <label className="text-[13px] font-medium text-slate-600">วันที่ <span className="text-rose-500">*</span></label>
-                  <input disabled={isViewOnly} type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="w-full h-[40px] px-3 bg-white border border-slate-200 rounded-[10px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50 disabled:text-slate-500" />
+                  <div className="relative">
+                    <input disabled={isViewOnly} type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="w-full h-[40px] pl-3 pr-9 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50 disabled:text-slate-500" />
+                    <CalendarClock className="absolute right-3 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-sky-500 pointer-events-none opacity-80" />
+                  </div>
                 </div>
                 <div className="flex-[3] space-y-1.5">
                   <label className="text-[13px] font-medium text-slate-600">หมายเหตุ</label>
-                  <input disabled={isViewOnly} type="text" value={formData.note || ''} onChange={(e) => setFormData({...formData, note: e.target.value})} className="w-full h-[40px] px-3 bg-white border border-slate-200 rounded-[10px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50 disabled:text-slate-500" placeholder="ใส่หมายเหตุ (ถ้ามี)" />
+                  <input disabled={isViewOnly} type="text" value={formData.note || ''} onChange={(e) => setFormData({...formData, note: e.target.value})} className="w-full h-[40px] px-3 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50 disabled:text-slate-500" placeholder="ใส่หมายเหตุ (ถ้ามี)" />
                 </div>
               </div>
 
@@ -1564,11 +1598,14 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
               <div className="flex flex-col md:flex-row gap-4 shrink-0">
                 <div className="flex-1 space-y-1.5">
                   <label className="text-[13px] font-medium text-slate-600">วันที่ <span className="text-rose-500">*</span></label>
-                  <input disabled={isViewOnly} type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="w-full h-[40px] px-3 bg-white border border-slate-200 rounded-[10px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50 disabled:text-slate-500" />
+                  <div className="relative">
+                    <input disabled={isViewOnly} type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="w-full h-[40px] pl-3 pr-9 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50 disabled:text-slate-500" />
+                    <CalendarClock className="absolute right-3 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-sky-500 pointer-events-none opacity-80" />
+                  </div>
                 </div>
                 <div className="flex-[3] space-y-1.5">
                   <label className="text-[13px] font-medium text-slate-600">หมายเหตุ</label>
-                  <input disabled={isViewOnly} type="text" value={formData.note || ''} onChange={(e) => setFormData({...formData, note: e.target.value})} className="w-full h-[40px] px-3 bg-white border border-slate-200 rounded-[10px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50 disabled:text-slate-500" placeholder="ใส่หมายเหตุ (ถ้ามี)" />
+                  <input disabled={isViewOnly} type="text" value={formData.note || ''} onChange={(e) => setFormData({...formData, note: e.target.value})} className="w-full h-[40px] px-3 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50 disabled:text-slate-500" placeholder="ใส่หมายเหตุ (ถ้ามี)" />
                 </div>
               </div>
 
@@ -1610,7 +1647,7 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
                   <span className="font-bold text-[14px] text-slate-700 ml-2">รายการรับซื้อประจำวัน ({formatDateTh(selectedDateStr)})</span>
                   <div className="relative w-full md:w-1/3">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                    <input type="text" value={modalSearch} onChange={(e) => setModalSearch(e.target.value)} placeholder="ค้นหาเลขที่บิล หรือชื่อลูกค้า..." className="w-full h-[40px] pl-10 pr-4 bg-slate-50 border border-slate-200 rounded-[10px] text-[14px] text-slate-700 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all" />
+                    <input type="text" value={modalSearch} onChange={(e) => setModalSearch(e.target.value)} placeholder="ค้นหาเลขที่บิล หรือชื่อลูกค้า..." className="w-full h-[40px] pl-10 pr-4 bg-slate-50 border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all" />
                   </div>
                 </div>
 
@@ -1675,7 +1712,19 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
   const [visibleCount, setVisibleCount] = useState(20); 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [formData, setFormData] = useState({ id: '', name: '', type: 'Regular', phone: '', status: 'Active' });
+  const [formData, setFormData] = useState({ 
+    id: '', 
+    prefix: '', 
+    name: '', 
+    type: 'Regular', 
+    phone: '', 
+    status: 'Active', 
+    taxId: '', 
+    email: '', 
+    address: '',
+    bankName: '',
+    bankAccount: '' 
+  });
   const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, id: null });
   const [searchQuery, setSearchQuery] = useState('');
   const [isViewOnly, setIsViewOnly] = useState(false); 
@@ -1695,7 +1744,7 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
   const filteredCustomers = customers.filter(c => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
-    return ((c.id || '').toLowerCase().includes(q) || (c.name || '').toLowerCase().includes(q) || (c.phone || '').toLowerCase().includes(q));
+    return ((c.id || '').toLowerCase().includes(q) || (c.name || '').toLowerCase().includes(q) || (c.phone || '').toLowerCase().includes(q) || (c.bankName || '').toLowerCase().includes(q) || (c.bankAccount || '').toLowerCase().includes(q));
   }).sort((a, b) => {
     const aValue = a[sortConfig.key] || '';
     const bValue = b[sortConfig.key] || '';
@@ -1729,7 +1778,19 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
       setFormData(customer);
       setEditingId(customer.id);
     } else {
-      setFormData({ id: 'AUTO', name: '', type: 'Regular', phone: '', status: 'Active' });
+      setFormData({ 
+        id: 'AUTO', 
+        prefix: '', 
+        name: '', 
+        type: 'Regular', 
+        phone: '', 
+        status: 'Active', 
+        taxId: '', 
+        email: '', 
+        address: '',
+        bankName: '',
+        bankAccount: '' 
+      });
       setEditingId(null);
     }
     setIsModalOpen(true);
@@ -1925,7 +1986,7 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
                   </div>
                   <div className="space-y-1.5 md:col-span-2">
                     <label className="text-[13px] font-medium text-slate-600">หมายเลขบัตรประชาชน / เลขผู้เสียภาษี</label>
-                    <input disabled={isViewOnly} placeholder="1-xxxx-xxxxx-xx-x" className="w-full h-[44px] px-4 bg-white border border-slate-200 rounded-[12px] font-mono-code text-[14px] text-slate-700 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed" />
+                    <input disabled={isViewOnly} value={formData.taxId || ''} onChange={(e)=>setFormData({...formData, taxId: e.target.value})} placeholder="1-xxxx-xxxxx-xx-x" className="w-full h-[44px] px-4 bg-white border border-slate-200 rounded-[12px] font-mono-code text-[14px] text-slate-700 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed" />
                   </div>
                 </div>
               </div>
@@ -1938,11 +1999,36 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[13px] font-medium text-slate-600">อีเมล</label>
-                    <input disabled={isViewOnly} placeholder="example@email.com" className="w-full h-[44px] px-4 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed" />
+                    <input disabled={isViewOnly} value={formData.email || ''} onChange={(e)=>setFormData({...formData, email: e.target.value})} placeholder="example@email.com" className="w-full h-[44px] px-4 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed" />
                   </div>
                   <div className="space-y-1.5 md:col-span-2">
                     <label className="text-[13px] font-medium text-slate-600">ที่อยู่</label>
-                    <textarea disabled={isViewOnly} placeholder="บ้านเลขที่, ซอย, ถนน, ตำบล, อำเภอ, จังหวัด, รหัสไปรษณีย์..." className="w-full h-[88px] p-4 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all resize-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"></textarea>
+                    <textarea disabled={isViewOnly} value={formData.address || ''} onChange={(e)=>setFormData({...formData, address: e.target.value})} placeholder="บ้านเลขที่, ซอย, ถนน, ตำบล, อำเภอ, จังหวัด, รหัสไปรษณีย์..." className="w-full h-[88px] p-4 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all resize-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"></textarea>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white border border-slate-200/60 rounded-[20px] p-6 shadow-sm">
+                <div className="flex items-center gap-2 text-sky-600 border-b border-slate-100 pb-4 mb-5"><CircleDollarSign className="w-5 h-5" /><h4 className="font-bold text-[16px]">ข้อมูลบัญชีธนาคาร</h4></div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                  <div className="space-y-1.5">
+                    <label className="text-[13px] font-medium text-slate-600">ชื่อธนาคาร</label>
+                    <input disabled={isViewOnly} list="thai-banks" value={formData.bankName || ''} onChange={(e)=>setFormData({...formData, bankName: e.target.value})} placeholder="เลือกหรือพิมพ์ชื่อธนาคาร..." className="w-full h-[44px] px-4 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed" />
+                    <datalist id="thai-banks">
+                      <option value="ธนาคารกสิกรไทย (KBANK)" />
+                      <option value="ธนาคารไทยพาณิชย์ (SCB)" />
+                      <option value="ธนาคารกรุงเทพ (BBL)" />
+                      <option value="ธนาคารกรุงไทย (KTB)" />
+                      <option value="ธนาคารทหารไทยธนชาต (TTB)" />
+                      <option value="ธนาคารกรุงศรีอยุธยา (BAY)" />
+                      <option value="ธนาคารออมสิน (GSB)" />
+                      <option value="ธนาคารเพื่อการเกษตรและสหกรณ์การเกษตร (ธ.ก.ส.)" />
+                      <option value="ธนาคารอาคารสงเคราะห์ (ธอส.)" />
+                      <option value="ธนาคารยูโอบี (UOB)" />
+                    </datalist>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[13px] font-medium text-slate-600">เลขที่บัญชี</label>
+                    <input disabled={isViewOnly} value={formData.bankAccount || ''} onChange={(e)=>setFormData({...formData, bankAccount: e.target.value})} placeholder="xxx-x-xxxxx-x" className="w-full h-[44px] px-4 bg-white border border-slate-200 rounded-[12px] font-mono-code text-[14px] text-slate-700 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed" />
                   </div>
                 </div>
               </div>
@@ -2546,7 +2632,10 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-x-6 gap-y-5">
                   <div className="space-y-1.5 md:col-span-2">
                     <label className="text-[13px] font-medium text-slate-600">วันที่รายการ <span className="text-rose-500">*</span></label>
-                    <input disabled={isViewOnly} type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="w-full h-[44px] px-4 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50 disabled:text-slate-500" />
+                    <div className="relative">
+                      <input disabled={isViewOnly} type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="w-full h-[44px] pl-4 pr-10 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50 disabled:text-slate-500" />
+                      <CalendarClock className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-sky-500 pointer-events-none opacity-80" />
+                    </div>
                   </div>
                   <div className="space-y-1.5 md:col-span-2">
                     <label className="text-[13px] font-medium text-slate-600">เลขที่อ้างอิง (บิล) <span className="text-rose-500">*</span></label>
