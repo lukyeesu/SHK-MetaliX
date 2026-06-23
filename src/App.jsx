@@ -130,20 +130,7 @@ const generateDocId = (prefix, dataArray, dateStr) => {
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzvTHxvoyfPAz2eKZy2es-hYSL9Y5n198mNVx3XOJPntCnmC9yHy3LTUOm6GsS-_m7e/exec";
 
 // --- Main Application ---
-export default function App() {
-  const [activeMenu, setActiveMenu] = useState('daily_prices');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isLoading, setIsLoading] = useState(false);
-  const [loadingMsg, setLoadingMsg] = useState('');
-  
-  const [customerData, setCustomerData] = useState(null); 
-  const [productData, setProductData] = useState(null);   
-  const [stockData, setStockData] = useState(null);       
-  const [lockData, setLockData] = useState(null);         
-  const [dailyPriceData, setDailyPriceData] = useState(null); 
-  const [billingData, setBillingData] = useState(null);
-
-  const calculateDynamicQuotas = useCallback((locks, stocks, excludeRefId = null) => {
+const calculateDynamicQuotas = (locks, stocks, excludeRefId = null) => {
     if (!locks || !stocks) return [];
     // Sort chronologically (oldest first) to carry forward correctly
     const sortedLocks = [...locks].sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -185,7 +172,21 @@ export default function App() {
         unit: lock.dailyLimitUnit || 'Kg.'
       };
     });
-  }, []);
+};
+
+export default function App() {
+  const [activeMenu, setActiveMenu] = useState('daily_prices');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingMsg, setLoadingMsg] = useState('');
+  
+  const [customerData, setCustomerData] = useState(null); 
+  const [productData, setProductData] = useState(null);   
+  const [stockData, setStockData] = useState(null);       
+  const [lockData, setLockData] = useState(null);         
+  const [dailyPriceData, setDailyPriceData] = useState(null); 
+  const [billingData, setBillingData] = useState(null);
+
 
 
   // --- Global Bill Modal State ---
@@ -410,7 +411,6 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
   } : {
     id: '', type: 'BUY', 
     date: new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().slice(0, 19), 
-    referenceDate: new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().slice(0, 10),
     category: 'ซื้อของเก่า', customerId: '', customerName: '', 
     items: [{ rowId: Date.now(), productId: '', name: '', quantity: '', price: '', unit: 'กก.' }],
     quotaRefs: [''],
@@ -418,6 +418,7 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
   };
 
   const [formData, setFormData] = useState(initialFormData);
+
 
   const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
   const [customerSearch, setCustomerSearch] = useState(config.bill ? config.bill.customerName : '');
@@ -452,6 +453,23 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
   // รายการโควตาสำหรับ Dropdown
   const availableQuotas = calculateDynamicQuotas(lockData, stockData, editingId)
     .sort((a, b) => new Date(b.dateStr) - new Date(a.dateStr));
+
+  useEffect(() => {
+    if (config.isOpen && !config.bill) {
+      const defaultQuota = availableQuotas.find(q => q.remaining > 0);
+      setFormData(prev => ({
+        ...prev,
+        quotaRefs: [defaultQuota ? defaultQuota.dateStr : prev.date.split('T')[0]]
+      }));
+    } else if (config.isOpen && config.bill && config.bill.id) {
+      const relatedStocks = (stockData || []).filter(s => s.refId === config.bill.id);
+      const uniqueRefs = [...new Set(relatedStocks.map(s => s.quotaRefDate || s.date?.split('T')[0]).filter(Boolean))];
+      setFormData(prev => ({
+        ...prev,
+        quotaRefs: uniqueRefs.length > 0 ? uniqueRefs : [config.bill.date ? config.bill.date.split('T')[0] : '']
+      }));
+    }
+  }, [config.isOpen, config.bill, availableQuotas, stockData]);
 
   const formatDateTh = (dateStr) => {
     if (!dateStr) return '-';
@@ -506,7 +524,7 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
 
       const newMultiplier = formData.type === 'BUY' ? 1 : -1; 
       const timePart = formData.date.includes('T') ? formData.date.split('T')[1] : '00:00:00';
-      const stockDateToSave = formData.referenceDate ? `${formData.referenceDate}T${timePart}` : formData.date;
+      const stockDateToSave = formData.date;
       
       for (let i = 0; i < formData.items.length; i++) {
         const item = formData.items[i];
