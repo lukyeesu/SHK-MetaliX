@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Users, Lock, PackagePlus, Box, FileText, UserCircle, 
   BarChart3, Settings, Plus, Edit, Trash2, X, Loader2, 
@@ -11,7 +11,7 @@ import {
 // --- Shared Components ---
 
 const FullPageLoader = ({ message }) => (
-  <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-[99] flex flex-col items-center justify-center font-body">
+  <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center font-body">
     <Loader2 className="w-12 h-12 text-sky-500 animate-spin mb-4" />
     <div className="bg-white px-6 py-3 rounded-[16px] shadow-[0_8px_32px_rgba(0,0,0,0.04)] font-medium text-slate-800 border border-slate-100">
       {message || 'กำลังประมวลผล...'}
@@ -130,50 +130,6 @@ const generateDocId = (prefix, dataArray, dateStr) => {
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzvTHxvoyfPAz2eKZy2es-hYSL9Y5n198mNVx3XOJPntCnmC9yHy3LTUOm6GsS-_m7e/exec";
 
 // --- Main Application ---
-const calculateDynamicQuotas = (locks, stocks, excludeRefId = null) => {
-    if (!locks || !stocks) return [];
-    // Sort chronologically (oldest first) to carry forward correctly
-    const sortedLocks = [...locks].sort((a, b) => new Date(a.date) - new Date(b.date));
-    let carryOverUsed = 0;
-    
-    return sortedLocks.map((lock, index) => {
-      const lockDateStr = lock.date ? lock.date.split('T')[0] : '';
-      const limit = Number(lock.dailyLimitKg) || 0;
-      
-      const rawUsed = stocks
-        .filter(s => {
-          if (!(s.date || '').startsWith(lockDateStr)) return false;
-          if (!(s.refId || '').startsWith('REC')) return false;
-          if (excludeRefId && s.refId === excludeRefId) return false;
-          return true;
-        })
-        .reduce((sum, s) => sum + (Number(s.quantity) || 0), 0);
-        
-      const totalToHandle = rawUsed + carryOverUsed;
-      let actualUsed = totalToHandle;
-      let remaining = limit - actualUsed;
-      
-      // If it's not the last day and quota is negative, carry over the deficit
-      if (index < sortedLocks.length - 1 && remaining < 0) {
-        carryOverUsed = Math.abs(remaining);
-        actualUsed = limit;
-        remaining = 0;
-      } else {
-        carryOverUsed = 0;
-      }
-      
-      return {
-        ...lock,
-        dateStr: lockDateStr,
-        limit,
-        rawUsed,
-        used: actualUsed,
-        remaining,
-        unit: lock.dailyLimitUnit || 'Kg.'
-      };
-    });
-};
-
 export default function App() {
   const [activeMenu, setActiveMenu] = useState('daily_prices');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -186,8 +142,6 @@ export default function App() {
   const [lockData, setLockData] = useState(null);         
   const [dailyPriceData, setDailyPriceData] = useState(null); 
   const [billingData, setBillingData] = useState(null);
-
-
 
   // --- Global Bill Modal State ---
   const [billModalConfig, setBillModalConfig] = useState({ isOpen: false, bill: null, isViewOnly: false });
@@ -303,7 +257,7 @@ export default function App() {
 
       <aside className={`hidden md:flex flex-col bg-white/80 backdrop-blur-xl border-r border-slate-200 transition-all duration-300 z-40 ${isSidebarOpen ? 'w-[210px]' : 'w-[88px]'}`}>
         <div className="h-[72px] px-6 flex items-center justify-between border-b border-slate-100">
-          {isSidebarOpen && <span className="font-display text-[18px] font-bold tracking-[-0.01em] text-sky-500 truncate">SHK MetaliX</span>}
+          {isSidebarOpen && <span className="font-display text-[18px] font-bold tracking-[-0.01em] text-sky-500 truncate">SHK System</span>}
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-slate-50 rounded-[12px] transition-colors text-slate-400">
             <Menu className="w-5 h-5" />
           </button>
@@ -356,7 +310,6 @@ export default function App() {
             <LockWeightModule 
               setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
               lockData={lockData} setLockData={setLockData} stockData={stockData} billingData={billingData} openBillModal={openBillModal}
-              calculateDynamicQuotas={calculateDynamicQuotas}
             />
           ) : activeMenu === 'products' ? (
             <ProductModule 
@@ -406,70 +359,117 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
   const editingId = config.bill ? config.bill.id : null;
   const bills = billingData || [];
 
+  // ฟังก์ชันช่วยหาโควตาที่เหลือของแต่ละวัน
+  const getQuotaRemaining = (dateStr, excludeBillId = null) => {
+    const refLock = (lockData || []).find(l => (l.date || '').startsWith(dateStr));
+    const limit = refLock ? Number(refLock.dailyLimitKg) || 0 : 0;
+    const used = (stockData || [])
+      .filter(s => {
+        const matchDate = s.quotaDate === dateStr || (!s.quotaDate && (s.date || '').startsWith(dateStr));
+        return matchDate && (s.refId || '').startsWith('REC') && s.refId !== excludeBillId;
+      })
+      .reduce((sum, s) => sum + (Number(s.quantity) || 0), 0);
+    return limit - used;
+  };
+
   const initialFormData = config.bill ? { 
-    ...config.bill 
+    ...config.bill, 
+    // กรณีแก้ไข ดึง array กลับมา หรือถ้าเป็นบิลเก่าให้เอา referenceDate เดิมมาใส่ array
+    quotaDates: config.bill.quotaDates || (config.bill.referenceDate ? [config.bill.referenceDate] : [config.bill.date ? config.bill.date.split('T')[0] : ''])
   } : {
     id: '', type: 'BUY', 
     date: new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().slice(0, 19), 
+    quotaDates: [], 
     category: 'ซื้อของเก่า', customerId: '', customerName: '', 
     items: [{ rowId: Date.now(), productId: '', name: '', quantity: '', price: '', unit: 'กก.' }],
-    quotaRefs: [''],
     note: '', grandTotal: 0, status: 'Completed'
   };
 
   const [formData, setFormData] = useState(initialFormData);
-
-
   const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
   const [customerSearch, setCustomerSearch] = useState(config.bill ? config.bill.customerName : '');
   const customerRef = useRef(null);
 
-  const [isQuotaDropdownOpen, setIsQuotaDropdownOpen] = useState(false);
-  const quotaRef = useRef(null);
-
-  // แยกวันที่: ดึงราคาสินค้าอิงจาก "วันที่ทำรายการ"
+  // ดึงราคาสินค้าอิงจาก "วันที่ทำรายการ (date)"
   const priceDateStr = formData.date ? formData.date.split('T')[0] : '';
   const todayPriceList = (dailyPriceData || []).find(p => (p.date || '').startsWith(priceDateStr));
   const dailyItems = todayPriceList ? (todayPriceList.items || []) : [];
 
-  // แยกวันที่: ดึงโควตาอิงจาก "อ้างอิงโควตาวันที่"
-  const quotaDateStr = priceDateStr;
-
-  // --- Quota Calculation Logic ---
-  const refLock = (lockData || []).find(l => (l.date || '').startsWith(quotaDateStr));
-  const dailyLimitKg = refLock ? Number(refLock.dailyLimitKg) || 0 : 0;
-  
-  const usedFromDB = (stockData || [])
-    .filter(s => (s.date || '').startsWith(quotaDateStr) && (s.refId || '').startsWith('REC') && s.refId !== editingId)
-    .reduce((sum, s) => sum + (Number(s.quantity) || 0), 0);
-    
-  const usedFromForm = formData.type === 'BUY' 
-    ? (formData.items || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)
-    : 0;
-    
-  const remainingQuota = dailyLimitKg - usedFromDB - usedFromForm;
-  const isQuotaExceeded = formData.type === 'BUY' && remainingQuota < 0;
-
-  // รายการโควตาสำหรับ Dropdown
-  const availableQuotas = calculateDynamicQuotas(lockData, stockData, editingId)
-    .sort((a, b) => new Date(b.dateStr) - new Date(a.dateStr));
-
+  // กำหนดค่า Default โควตาวันเก่าสุดที่ยังว่าง (ตอนเปิดบิลใหม่)
   useEffect(() => {
-    if (config.isOpen && !config.bill) {
-      const defaultQuota = availableQuotas.find(q => q.remaining > 0);
-      setFormData(prev => ({
-        ...prev,
-        quotaRefs: [defaultQuota ? defaultQuota.dateStr : prev.date.split('T')[0]]
-      }));
-    } else if (config.isOpen && config.bill && config.bill.id) {
-      const relatedStocks = (stockData || []).filter(s => s.refId === config.bill.id);
-      const uniqueRefs = [...new Set(relatedStocks.map(s => s.quotaRefDate || s.date?.split('T')[0]).filter(Boolean))];
-      setFormData(prev => ({
-        ...prev,
-        quotaRefs: uniqueRefs.length > 0 ? uniqueRefs : [config.bill.date ? config.bill.date.split('T')[0] : '']
-      }));
+    if (!config.bill && formData.quotaDates.length === 0) {
+      let oldestAvailable = new Date().toISOString().split('T')[0];
+      const sortedLocks = [...(lockData || [])].sort((a, b) => new Date(a.date) - new Date(b.date));
+      for (let lock of sortedLocks) {
+        const qDate = lock.date.split('T')[0];
+        if (getQuotaRemaining(qDate) > 0) {
+          oldestAvailable = qDate; break;
+        }
+      }
+      setFormData(prev => ({ ...prev, quotaDates: [oldestAvailable] }));
     }
-  }, [config.isOpen, config.bill, availableQuotas, stockData]);
+  }, [config.bill, lockData, stockData]);
+
+  // รายการโควตาทั้งหมดสำหรับให้เลือกใน Dropdown
+  const availableQuotas = (lockData || []).map(lock => {
+    const lockDateStr = lock.date ? lock.date.split('T')[0] : '';
+    const limit = Number(lock.dailyLimitKg) || 0;
+    const remaining = getQuotaRemaining(lockDateStr, editingId);
+    return { dateStr: lockDateStr, limit, remaining, unit: lock.dailyLimitUnit || 'Kg.' };
+  }).sort((a, b) => new Date(b.dateStr) - new Date(a.dateStr));
+
+  // --- ฟังก์ชันกดเพิ่มวันที่โควตา (แบบฉลาด ไม่ข้ามวัน) ---
+  const handleAddQuotaDate = () => {
+    // เรียงวันจากเก่าไปใหม่
+    const sortedQuotas = [...availableQuotas].sort((a, b) => new Date(a.dateStr) - new Date(b.dateStr));
+    
+    // หาวันที่ "ยังไม่ถูกเลือก" และ "ยังมีโควตาเหลือ" เป็นอันดับแรก
+    const nextQ = sortedQuotas.find(q => !formData.quotaDates.includes(q.dateStr) && q.remaining > 0);
+    
+    let dateToAdd = priceDateStr || new Date().toISOString().split('T')[0];
+    if (nextQ) {
+      dateToAdd = nextQ.dateStr;
+    } else {
+       // ถ้าไม่มีวันไหนเหลือโควตาเลย ให้หาวันที่ยังไม่ถูกเลือกมาแปะไว้ก่อน
+       const fallbackQ = sortedQuotas.find(q => !formData.quotaDates.includes(q.dateStr));
+       if (fallbackQ) dateToAdd = fallbackQ.dateStr;
+    }
+    
+    setFormData(prev => ({...prev, quotaDates: [...prev.quotaDates, dateToAdd]}));
+  };
+
+  // --- Real-time Allocation Logic (ระบบฉีกโควตาอัตโนมัติ) ---
+  const calculateAllocation = () => {
+    if (formData.type !== 'BUY') return [];
+    
+    let totalBillWeight = (formData.items || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+    let remainingToAllocate = totalBillWeight;
+    let allocations = [];
+
+    const safeQuotaDates = formData.quotaDates.length > 0 ? formData.quotaDates : [priceDateStr];
+
+    for (let i = 0; i < safeQuotaDates.length; i++) {
+      const qDate = safeQuotaDates[i];
+      const isLast = i === safeQuotaDates.length - 1;
+      const capacity = getQuotaRemaining(qDate, editingId);
+      
+      let allocateHere = 0;
+      if (remainingToAllocate > 0) {
+        if (isLast) {
+          allocateHere = remainingToAllocate;
+          remainingToAllocate = 0;
+        } else {
+          allocateHere = Math.min(Math.max(0, capacity), remainingToAllocate);
+          remainingToAllocate -= allocateHere;
+        }
+      }
+      allocations.push({ date: qDate, capacity, allocated: allocateHere, resultingRemaining: capacity - allocateHere });
+    }
+    return allocations;
+  };
+
+  const allocations = calculateAllocation();
+  const isAnyQuotaExceeded = allocations.some(a => a.resultingRemaining < 0);
 
   const formatDateTh = (dateStr) => {
     if (!dateStr) return '-';
@@ -497,7 +497,6 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (customerRef.current && !customerRef.current.contains(event.target)) setIsCustomerDropdownOpen(false);
-      if (quotaRef.current && !quotaRef.current.contains(event.target)) setIsQuotaDropdownOpen(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -507,12 +506,13 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
     e.preventDefault();
     if (!formData.customerName && !formData.customerId) return addToast('กรุณาระบุชื่อลูกค้า', 'error');
     if (formData.items.length === 0) return addToast('กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ', 'error');
+    if (formData.type === 'BUY' && formData.quotaDates.length === 0) return addToast('กรุณาเลือกโควตาอย่างน้อย 1 วัน', 'error');
     
-    setLoadingMsg('กำลังบันทึกบิลและอัปเดตสต๊อก...');
+    setLoadingMsg('กำลังฉีกน้ำหนักและบันทึกลงระบบ...');
     setIsLoading(true);
 
-    const payload = { ...formData, _editingId: editingId };
-    const response = await requestAPI('SAVE_DATA', 'Billing', payload);
+    const payloadToSave = { ...formData, _editingId: editingId };
+    const response = await requestAPI('SAVE_DATA', 'Billing', payloadToSave);
     
     if (response.status === 'success') {
       const billId = response.data?.id || formData.id; 
@@ -522,25 +522,58 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
         for (let s of oldStocks) { await requestAPI('DELETE_DATA', 'Stock', { id: s.id }); }
       }
 
-      const newMultiplier = formData.type === 'BUY' ? 1 : -1; 
-      const timePart = formData.date.includes('T') ? formData.date.split('T')[1] : '00:00:00';
-      const stockDateToSave = formData.date;
-      
-      for (let i = 0; i < formData.items.length; i++) {
-        const item = formData.items[i];
-        const qtyChange = (Number(item.quantity) || 0) * newMultiplier;
-        if (qtyChange === 0) continue; 
+      if (formData.type === 'BUY') {
+        // --- กระบวนการฉีกน้ำหนัก (Auto-Split) เข้าสต๊อกแต่ละโควตา ---
+        let stockIndexCounter = 1;
+        
+        for (let item of formData.items) {
+          let itemQtyRemaining = Number(item.quantity) || 0;
+          if (itemQtyRemaining <= 0) continue;
 
-        const newStockPayload = {
-          id: `${billId}-${i + 1}`, refId: billId, date: stockDateToSave,
-          productId: item.productId, name: item.name, category: item.category || '',
-          quantity: qtyChange, unit: item.unit || 'กก.', status: 'Active',
-          note: formData.type === 'BUY' ? `รับซื้อ (บิล ${billId})` : `ขายออก (บิล ${billId})`
-        };
-        await requestAPI('SAVE_DATA', 'Stock', newStockPayload);
+          for (let alloc of allocations) {
+            if (itemQtyRemaining <= 0) break;
+            
+            // จำกัดสิทธิ์ให้ไอเทมนี้เข้าโควตานี้ได้กี่กิโล (ตามที่ Allocations คำนวณไว้ด้านบน)
+            let allowedToTake = Math.min(itemQtyRemaining, alloc.allocated);
+            if (alloc === allocations[allocations.length - 1]) {
+               // ถ้าเป็นโควตาสุดท้าย ไอเทมที่เหลือยัดลงให้หมด
+               allowedToTake = itemQtyRemaining;
+            }
+
+            if (allowedToTake <= 0) continue;
+
+            const newStockPayload = {
+              id: `${billId}-${stockIndexCounter++}`, 
+              refId: billId, 
+              date: formData.date, // <--- ใช้วันที่บิลเป๊ะๆ ไม่ทำลายสถิติสต๊อก
+              quotaDate: alloc.date, // <--- ฟิลด์ใหม่ผูกโควตา
+              productId: item.productId, name: item.name, category: item.category || '',
+              quantity: allowedToTake, unit: item.unit || 'กก.', status: 'Active',
+              note: `รับซื้อ (บิล ${billId}) [หักโควตา ${formatDateTh(alloc.date)}]`
+            };
+            await requestAPI('SAVE_DATA', 'Stock', newStockPayload);
+            
+            itemQtyRemaining -= allowedToTake;
+            alloc.allocated -= allowedToTake; // หักลดยอด alloc เผื่อไอเทมชิ้นต่อไป
+          }
+        }
+      } else {
+        // --- บิลขายออก (ไม่สนใจโควตา) ---
+        for (let i = 0; i < formData.items.length; i++) {
+          const item = formData.items[i];
+          const qtyChange = (Number(item.quantity) || 0) * -1;
+          if (qtyChange === 0) continue; 
+          const newStockPayload = {
+            id: `${billId}-${i + 1}`, refId: billId, date: formData.date, quotaDate: '',
+            productId: item.productId, name: item.name, category: item.category || '',
+            quantity: qtyChange, unit: item.unit || 'กก.', status: 'Active',
+            note: `ขายออก (บิล ${billId})`
+          };
+          await requestAPI('SAVE_DATA', 'Stock', newStockPayload);
+        }
       }
 
-      addToast(editingId ? 'อัปเดตบิลสำเร็จ' : 'สร้างบิลสำเร็จ', 'success');
+      addToast(editingId ? 'อัปเดตบิลสำเร็จ' : 'สร้างบิลและหักโควตาอัตโนมัติสำเร็จ', 'success');
       reloadAllData(); 
       onClose();
     }
@@ -615,66 +648,151 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
               <label className="text-[13px] font-medium text-slate-500">วันที่ทำรายการ (อิงราคา) <span className="text-rose-500">*</span></label>
               <input disabled={isViewOnly} type="datetime-local" step="1" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="w-full h-[48px] px-4 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50 disabled:text-slate-500" />
             </div>
-            <div className="space-y-1.5" ref={quotaRef}>
-              <label className="text-[13px] font-medium text-slate-500">อ้างอิงโควตาวันที่ <span className="text-rose-500">*</span></label>
-              <div className="relative">
-                <button 
-                  type="button" 
-                  disabled={isViewOnly} 
-                  onClick={() => !isViewOnly && setIsQuotaDropdownOpen(!isQuotaDropdownOpen)} 
-                  className="w-full h-[48px] px-4 bg-amber-50 border border-amber-200 rounded-[12px] text-[14px] font-bold text-amber-700 outline-none focus:border-amber-500 transition-all disabled:bg-slate-50 disabled:text-slate-500 flex items-center justify-between"
-                >
-                  <span>{formData.referenceDate ? formatDateTh(formData.referenceDate) : 'เลือกโควตา...'}</span>
-                  <CalendarClock className="w-5 h-5 opacity-70" />
-                </button>
-                {isQuotaDropdownOpen && !isViewOnly && (
-                  <ul className="absolute z-50 w-full mt-2 bg-white border border-slate-100 rounded-[16px] shadow-[0_8px_30px_rgba(0,0,0,0.12)] max-h-60 overflow-y-auto py-2">
-                    {availableQuotas.length > 0 ? (
-                      availableQuotas.map((q, idx) => (
-                        <li key={idx} onClick={() => { setFormData({...formData, referenceDate: q.dateStr}); setIsQuotaDropdownOpen(false); }} className="px-5 py-3 hover:bg-amber-50 cursor-pointer border-b border-slate-50 last:border-0 flex items-center justify-between transition-colors">
-                          <span className="font-bold text-slate-700">{formatDateTh(q.dateStr)}</span>
-                          <span className={`text-[12px] px-3 py-1 rounded-full font-mono-code font-bold ${q.remaining < 0 ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-700'}`}>
-                            {q.remaining.toLocaleString()} {q.unit}
-                          </span>
-                        </li>
-                      ))
-                    ) : (<li className="px-4 py-4 text-[14px] text-slate-400 text-center">ไม่มีโควตาที่ตั้งไว้</li>)}
-                  </ul>
-                )}
-              </div>
-            </div>
-            <div className="space-y-1.5 md:col-span-3 shrink-0">
+            {/* หมวดหมู่ (ย้ายขึ้นมาให้แสดงสำหรับทั้ง BUY และ SELL) */}
+            <div className="space-y-1.5 shrink-0">
               <label className="text-[13px] font-medium text-slate-500">หมวดหมู่ <span className="text-rose-500">*</span></label>
               <select disabled={isViewOnly} value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} className="w-full h-[48px] px-4 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50">
                 <option value="ซื้อของเก่า">ซื้อของเก่า</option><option value="ขายของเก่า">ขายของเก่า</option><option value="อื่นๆ">อื่นๆ</option>
               </select>
             </div>
+
+            {/* โซนเลือกโควตา (เฉพาะบิลรับซื้อ) */}
+            {formData.type === 'BUY' && (
+              <div className="space-y-1.5 md:col-span-3 bg-slate-50 p-4 rounded-[16px] border border-slate-100">
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-[13px] font-bold text-sky-600 flex items-center gap-1.5"><Lock className="w-4 h-4"/> โควตาที่ต้องการใช้ (หักน้ำหนัก) <span className="text-rose-500">*</span></label>
+                  {!isViewOnly && (
+                    <button type="button" onClick={handleAddQuotaDate} className="text-[12px] font-bold bg-sky-100 text-sky-600 px-3 py-1.5 rounded-full hover:bg-sky-200 transition-colors flex items-center gap-1">
+                      <Plus className="w-3 h-3"/> เพิ่มวันที่โควตา
+                    </button>
+                  )}
+                </div>
+                
+                <div className="flex flex-col gap-2">
+                  {formData.quotaDates.map((qDate, index) => {
+                    return (
+                      <div key={index} className="flex items-center gap-2">
+                         <div className="relative flex-1">
+                            <select 
+                              disabled={isViewOnly} 
+                              value={qDate} 
+                              onChange={(e) => {
+                                const newDates = [...formData.quotaDates];
+                                newDates[index] = e.target.value;
+                                setFormData(prev => ({...prev, quotaDates: newDates}));
+                              }} 
+                              className="w-full h-[48px] px-4 bg-amber-50 border border-amber-200 rounded-[12px] text-[14px] font-bold text-amber-700 outline-none focus:border-amber-500 transition-all appearance-none cursor-pointer disabled:bg-slate-50 disabled:text-slate-500 disabled:border-slate-200 disabled:cursor-not-allowed"
+                            >
+                              {availableQuotas.length > 0 ? (
+                                availableQuotas.map((q, idx) => (
+                                  <option key={idx} value={q.dateStr}>
+                                    {formatDateTh(q.dateStr)} (ว่าง {q.remaining.toLocaleString()} {q.unit})
+                                  </option>
+                                ))
+                              ) : <option value={qDate}>{formatDateTh(qDate)} (ไม่มีประวัติโควตา)</option>}
+                              {!availableQuotas.some(q => q.dateStr === qDate) && <option value={qDate}>{formatDateTh(qDate)} (ข้อมูลเก่า)</option>}
+                            </select>
+                            <CalendarClock className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-amber-600/50 pointer-events-none" />
+                         </div>
+                         {!isViewOnly && formData.quotaDates.length > 1 && (
+                           <button type="button" onClick={() => {
+                             const newDates = formData.quotaDates.filter((_, i) => i !== index);
+                             setFormData(prev => ({...prev, quotaDates: newDates}));
+                           }} className="w-[48px] h-[48px] flex items-center justify-center rounded-[12px] bg-rose-50 text-rose-500 hover:bg-rose-100 transition-colors shrink-0">
+                             <Trash2 className="w-5 h-5" />
+                           </button>
+                         )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
+          {/* กล่องสรุปการแบ่งโควตา (Real-time Preview - แบบกึ่งตาราง) */}
           {formData.type === 'BUY' && (
-            <div className={`p-4 rounded-[16px] border ${isQuotaExceeded ? 'bg-rose-50 border-rose-200' : 'bg-sky-50 border-sky-100'} flex items-center justify-between shrink-0 transition-colors`}>
-              <div className="flex flex-col">
-                <span className={`text-[13px] font-bold ${isQuotaExceeded ? 'text-rose-600' : 'text-sky-600'} flex items-center gap-1.5`}>
-                  {isQuotaExceeded ? <AlertTriangle className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-                  ตรวจสอบโควตารับซื้อ (อ้างอิงวันที่ {formatDateTh(quotaDateStr)})
-                </span>
-                <span className={`text-[12px] mt-1 ${isQuotaExceeded ? 'text-rose-500' : 'text-sky-600/80'} font-medium`}>
-                  เป้าหมาย: {dailyLimitKg.toLocaleString()} กก. | รับแล้ว: {usedFromDB.toLocaleString()} กก. | บิลนี้: {usedFromForm.toLocaleString()} กก.
-                </span>
-                {isQuotaExceeded && (
-                  <span className="text-[11px] text-rose-500 mt-1 bg-rose-100/50 w-fit px-2 py-0.5 rounded-md leading-tight">
-                    *น้ำหนักเกินโควตา แต่ระบบยังอนุญาตให้บันทึกบิลได้ (Soft Limit) เพื่อไม่ให้หน้างานสะดุดครับ
-                  </span>
-                )}
+            <div className={`p-5 rounded-[24px] border-2 ${isAnyQuotaExceeded ? 'bg-rose-50 border-rose-200 shadow-[0_4px_12px_rgba(244,63,94,0.1)]' : 'bg-gradient-to-br from-slate-50 to-sky-50/50 border-sky-200 shadow-[0_4px_12px_rgba(14,165,233,0.08)]'} flex flex-col gap-4 shrink-0 transition-all`}>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-200/60 pb-4">
+                 <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm ${isAnyQuotaExceeded ? 'bg-rose-100 text-rose-600' : 'bg-white text-sky-500'}`}>
+                       {isAnyQuotaExceeded ? <AlertTriangle className="w-5 h-5" /> : <BarChart3 className="w-5 h-5" />}
+                    </div>
+                    <span className={`text-[16px] font-bold ${isAnyQuotaExceeded ? 'text-rose-700' : 'text-slate-800'}`}>
+                       ภาพรวมการจัดสรรน้ำหนัก (ระบบคำนวณให้อัตโนมัติ)
+                    </span>
+                 </div>
+                 <div className="bg-white px-5 py-2 rounded-xl border border-slate-200 shadow-sm flex items-center gap-3">
+                    <span className="text-[14px] font-medium text-slate-500">น้ำหนักบิลรวม:</span>
+                    <span className="text-[18px] font-display font-bold text-slate-800">{(formData.items || []).reduce((sum, i) => sum + (Number(i.quantity)||0), 0).toLocaleString()} <span className="text-[14px] font-medium text-slate-500">กก.</span></span>
+                 </div>
               </div>
-              <div className="flex flex-col items-end">
-                <span className={`text-[11px] font-bold uppercase tracking-wider ${isQuotaExceeded ? 'text-rose-400' : 'text-sky-400'}`}>
-                  {isQuotaExceeded ? 'น้ำหนักเกินโควตา' : 'โควตาคงเหลือ'}
-                </span>
-                <span className={`text-[28px] font-display font-bold leading-none mt-1 ${isQuotaExceeded ? 'text-rose-600' : 'text-sky-600'}`}>
-                  {remainingQuota.toLocaleString()} <span className="text-[14px] font-normal">กก.</span>
-                </span>
+
+              <div className="flex flex-col gap-3">
+                 {/* Table Header (แสดงเฉพาะบน Desktop) */}
+                 <div className="hidden md:flex items-center px-4 pb-1 text-[13px] font-bold text-slate-500">
+                   <div className="w-[160px]">วันที่อ้างอิงโควตา</div>
+                   <div className="flex-1 flex items-center justify-between text-center pl-6 pr-2">
+                      <div className="w-1/3">โควตาเดิม (กก.)</div>
+                      <div className="w-1/3 text-sky-600">หักบิลนี้ (กก.)</div>
+                      <div className="w-1/3 text-emerald-600">คงเหลือ (กก.)</div>
+                   </div>
+                 </div>
+
+                 {allocations.map((alloc, idx) => (
+                    <div key={idx} className="bg-white rounded-[20px] p-4 border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col md:flex-row md:items-center gap-4 transition-colors hover:border-sky-300 hover:shadow-md">
+                       
+                       {/* Date Badge */}
+                       <div className="w-full md:w-[160px] shrink-0">
+                         <div className="bg-slate-50 border border-slate-200 px-4 py-2.5 rounded-xl flex items-center justify-center md:justify-start gap-2.5 w-full md:w-fit">
+                            <CalendarClock className="w-5 h-5 text-slate-400" />
+                            <span className="text-[15px] font-bold text-slate-700">{formatDateTh(alloc.date)}</span>
+                         </div>
+                       </div>
+                       
+                       {/* Flow calculation (แบ่ง 3 คอลัมน์เท่ากันเป๊ะ) */}
+                       <div className="flex-1 w-full flex items-center justify-between md:gap-4 relative pl-0 md:pl-6">
+                          
+                          {/* 1. Original */}
+                          <div className="w-1/3 flex flex-col items-center">
+                             <span className="md:hidden text-[12px] font-bold text-slate-400 mb-1">โควตาเดิม</span>
+                             <span className="text-[16px] md:text-[20px] font-mono-code font-bold text-slate-700">{alloc.capacity.toLocaleString()}</span>
+                          </div>
+                          
+                          <div className="hidden md:flex items-center justify-center text-slate-300">
+                             <div className="w-6 lg:w-12 h-[2px] bg-slate-200 rounded-full"></div>
+                          </div>
+                          
+                          {/* 2. Deduct */}
+                          <div className="w-1/3 flex flex-col items-center">
+                             <span className="md:hidden text-[12px] font-bold text-sky-500 mb-1">หักบิลนี้</span>
+                             <span className="text-[16px] md:text-[20px] font-mono-code font-bold text-sky-600">-{alloc.allocated.toLocaleString()}</span>
+                          </div>
+                          
+                          <div className="hidden md:flex items-center justify-center text-slate-300">
+                             <ArrowDownCircle className="w-6 h-6 -rotate-90 text-slate-300" />
+                          </div>
+                          
+                          {/* 3. Remaining */}
+                          <div className="w-1/3 flex flex-col items-center">
+                             <span className="md:hidden text-[12px] font-bold text-slate-400 mb-1">คงเหลือ</span>
+                             <span className={`text-[16px] md:text-[20px] font-mono-code font-bold px-4 py-1.5 rounded-xl shadow-sm border ${alloc.resultingRemaining < 0 ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>
+                                {alloc.resultingRemaining.toLocaleString()}
+                             </span>
+                          </div>
+                       </div>
+                    </div>
+                 ))}
               </div>
+
+              {isAnyQuotaExceeded && (
+                <div className="bg-rose-100/50 border border-rose-200 rounded-xl p-3.5 flex gap-3 items-start mt-2">
+                  <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+                  <p className="text-[13px] md:text-[14px] text-rose-700 font-medium leading-relaxed">
+                    <span className="font-bold">ทะลุโควตา!</span> ระบบโควตาวันสุดท้ายจะติดลบ แต่สามารถบันทึกบิลเพื่อรับซื้อของหน้างานได้ตามปกติ (Soft Limit) ระบบจะนำไปหักลบอัตโนมัติเมื่อตั้งโควตาวันถัดไป
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
@@ -1068,7 +1186,7 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {!(formData.items || []).length ? (
-                        <tr><td colSpan="7" className="text-center p-8 text-slate-400 text-[14px]">ไม่มีรายการสินค้า</td></tr>
+                        <tr><td colSpan="6" className="text-center p-8 text-slate-400 text-[14px]">ไม่มีรายการสินค้า</td></tr>
                       ) : (
                         (formData.items || []).filter(item => {
                           if (!modalSearch) return true;
@@ -1141,13 +1259,9 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
 // ==========================================
 // 2. LOCK WEIGHT MODULE (โควตาล็อกน้ำหนัก)
 // ==========================================
-function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, lockData, setLockData, stockData, billingData, openBillModal, calculateDynamicQuotas }) {
-  const locks = calculateDynamicQuotas ? calculateDynamicQuotas(lockData, stockData) : (lockData || []); 
+function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, lockData, setLockData, stockData, billingData, openBillModal }) {
+  const locks = lockData || []; 
   const [isFetchingTable, setIsFetchingTable] = useState(lockData === null); 
-  const activeLocks = locks.filter(l => l.status === 'Active');
-  const totalActiveLimit = activeLocks.reduce((sum, l) => sum + (l.limit !== undefined ? l.limit : Number(l.dailyLimitKg) || 0), 0);
-  const totalActiveUsed = activeLocks.reduce((sum, l) => sum + (l.used !== undefined ? l.used : 0), 0);
-  const totalActiveRemaining = totalActiveLimit - totalActiveUsed;
   const [visibleCount, setVisibleCount] = useState(20); 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -1251,20 +1365,47 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
     return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear() + 543}`;
   };
 
+  let totalActiveLimit = 0;
+  let totalActiveUsed = 0;
 
+  locks.forEach(lock => {
+    const lockDateStr = lock.date ? lock.date.split('T')[0] : '';
+    const limit = Number(lock.dailyLimitKg) || 0;
+    
+    // อัปเกรดตัว Filter ให้อ่านจากฟิลด์ quotaDate (ถ้ามี) ก่อนเสมอ
+    const used = (stockData || [])
+      .filter(s => {
+         const matchDate = s.quotaDate === lockDateStr || (!s.quotaDate && (s.date || '').startsWith(lockDateStr));
+         return matchDate && (s.refId || '').startsWith('REC');
+      })
+      .reduce((sum, s) => sum + (Number(s.quantity) || 0), 0);
+    
+    const rem = limit - used;
+    if (rem !== 0) {
+      totalActiveLimit += limit;
+      totalActiveUsed += used;
+    }
+  });
+
+  const totalActiveRemaining = totalActiveLimit - totalActiveUsed;
   const quotaUnit = 'Kg.';
 
   const selectedDateStr = formData.date ? formData.date.split('T')[0] : '';
   
+  // ในหน้า Modal ก็ควรอ่านจาก quotaDate เหมือนกัน
   const modalDailyStocks = (stockData || [])
-    .filter(s => (s.date || '').startsWith(selectedDateStr) && (s.refId || '').startsWith('REC'))
-    .sort((a, b) => new Date(b.date) - new Date(a.date));
+    .filter(s => {
+       const matchDate = s.quotaDate === selectedDateStr || (!s.quotaDate && (s.date || '').startsWith(selectedDateStr));
+       return matchDate && (s.refId || '').startsWith('REC');
+    });
 
   const totalModalUsedQuota = modalDailyStocks.reduce((sum, s) => sum + (Number(s.quantity) || 0), 0);
   const modalRemainingQuota = (Number(formData.dailyLimitKg) || 0) - totalModalUsedQuota;
 
+  // สำหรับตารางโชว์บิล ก็ใช้วิธีดึง refId แบบ Unique จาก modalDailyStocks
+  const modalBillIds = [...new Set(modalDailyStocks.map(s => s.refId))];
   const modalDailyBills = (billingData || [])
-    .filter(b => (b.date || '').startsWith(selectedDateStr))
+    .filter(b => modalBillIds.includes(b.id))
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
   const filteredModalBills = modalDailyBills.filter(b => {
@@ -1361,9 +1502,14 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
                 ) : (
                   filteredLocks.slice(0, visibleCount).map((lock, index) => {
                     const lockDateStr = lock.date ? lock.date.split('T')[0] : '';
-                    const totalQuotaRow = lock.limit !== undefined ? lock.limit : Number(lock.dailyLimitKg) || 0;
-                    const usedQuotaRow = lock.used !== undefined ? lock.used : 0;
-                    const remainingQuotaRow = lock.remaining !== undefined ? lock.remaining : totalQuotaRow - usedQuotaRow;
+                    const totalQuotaRow = Number(lock.dailyLimitKg) || 0;
+                    const usedQuotaRow = (stockData || [])
+                      .filter(s => {
+                         const matchDate = s.quotaDate === lockDateStr || (!s.quotaDate && (s.date || '').startsWith(lockDateStr));
+                         return matchDate && (s.refId || '').startsWith('REC');
+                      })
+                      .reduce((sum, s) => sum + (Number(s.quantity) || 0), 0);
+                    const remainingQuotaRow = totalQuotaRow - usedQuotaRow; // ลบ Math.max เพื่อให้แสดงติดลบได้
 
                     return (
                       <tr key={`${lock.id}-${index}`} onClick={() => openModal(lock, true)} className="hover:bg-slate-50/70 transition-colors cursor-pointer">
@@ -2262,7 +2408,7 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
               <p className="text-slate-500 sticky-header-desc text-[15px]">ตรวจสอบปริมาณคงคลัง และประวัติความเคลื่อนไหว</p>
             </div>
             <button onClick={() => openModal()} className="flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 bg-[#0ea5e9] hover:bg-[#0284c7] text-white px-4 py-2 sm:px-6 sm:py-3 pointer-events-auto">
-              <Plus className="w-5 h-5" /> <span className="hidden sm:inline">ปรับยอดสต๊อก</span>
+              <Plus className="w-5 h-5" /> <span className="hidden sm:inline">ปรับยอดสต๊อก (Manual)</span>
             </button>
           </div>
         </div>
