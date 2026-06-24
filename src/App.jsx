@@ -37,18 +37,69 @@ const Toast = ({ toasts, removeToast }) => (
   </div>
 );
 
-const ConfirmAlert = ({ isOpen, title, text, onConfirm, onCancel }) => {
+const ConfirmAlert = ({ isOpen, title, text, onConfirm, onCancel, children }) => {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
-      <div className="bg-white rounded-[24px] w-full max-w-sm shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        <div className="p-6 text-center">
+      <div className={`bg-white rounded-[24px] w-full ${children ? 'max-w-4xl' : 'max-w-sm'} shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]`}>
+        <div className="p-6 overflow-y-auto flex-1">
           <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4 text-rose-500"><AlertTriangle className="w-8 h-8" /></div>
-          <h3 className="text-[20px] font-bold text-slate-800 mb-2">{title}</h3>
-          <p className="text-[15px] text-slate-500 mb-6">{text}</p>
-          <div className="flex gap-3"><button onClick={onCancel} className="flex-1 py-3 bg-slate-50 text-slate-600 font-medium rounded-xl hover:bg-slate-100 transition-colors">ยกเลิก</button><button onClick={onConfirm} className="flex-1 py-3 bg-rose-500 text-white font-medium rounded-xl hover:bg-rose-600 transition-colors shadow-sm">ยืนยัน</button></div>
+          <h3 className="text-[20px] font-bold text-slate-800 mb-2 text-center">{title}</h3>
+          {text && <p className="text-[15px] text-slate-500 mb-6 text-center">{text}</p>}
+          
+          {children && (
+            <div className="my-4 border border-slate-100 rounded-[16px] overflow-hidden">
+              {children}
+            </div>
+          )}
+
+          <div className={`flex gap-3 mt-6 ${children ? 'justify-end' : 'justify-center w-full'}`}>
+            <button onClick={onCancel} className="px-6 py-3 bg-slate-50 text-slate-600 font-medium rounded-xl hover:bg-slate-100 transition-colors flex-1 max-w-[140px]">ยกเลิก</button>
+            <button onClick={onConfirm} className="px-6 py-3 bg-rose-500 text-white font-medium rounded-xl hover:bg-rose-600 transition-colors shadow-sm flex-1 max-w-[140px]">ยืนยัน</button>
+          </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+const ImpactAnalysisTable = ({ items }) => {
+  if (!items || items.length === 0) return null;
+  return (
+    <div className="overflow-x-auto bg-white min-h-[200px]">
+      <table className="w-full text-left border-collapse whitespace-nowrap min-w-[800px]">
+        <thead className="bg-slate-50 border-b border-slate-100">
+          <tr>
+            <th className="px-6 py-4 font-medium text-slate-500 text-[14px]">รหัสอ้างอิง</th>
+            <th className="px-6 py-4 font-medium text-slate-500 text-[14px] text-center">โมดูล</th>
+            <th className="px-6 py-4 font-medium text-slate-500 text-[14px] text-center">ประเภท</th>
+            <th className="px-6 py-4 font-medium text-slate-500 text-[14px]">ลูกค้า/รายละเอียด</th>
+            <th className="px-6 py-4 font-bold text-sky-500 text-[15px] bg-sky-50/20 w-[180px] text-right border-l border-r border-sky-100/50">น้ำหนัก/จำนวน</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {items.map((item, idx) => (
+            <tr key={idx} className="hover:bg-slate-50/50 transition-colors cursor-pointer group">
+              <td className="px-6 py-3 font-mono-code text-[14px] font-bold text-sky-500 group-hover:text-sky-600 transition-colors">{item.id}</td>
+              <td className="px-6 py-3 text-center">
+                <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[12px] font-medium bg-slate-100 text-slate-600">
+                  {item.moduleName}
+                </span>
+              </td>
+              <td className="px-6 py-3 text-center">
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-bold ${item.typeColor}`}>
+                  {item.icon}
+                  {item.typeText}
+                </span>
+              </td>
+              <td className="px-6 py-3 text-[14px] font-medium text-slate-800">{item.customer}</td>
+              <td className="px-6 py-3 text-[15px] font-bold text-slate-800 text-right bg-sky-50/10 border-l border-r border-sky-100/30 group-hover:bg-sky-100/30 transition-colors">
+                {Number(item.weight || 0).toLocaleString()} <span className="text-[13px] font-normal text-slate-500 ml-1">{item.unit || 'กก.'}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 };
@@ -332,6 +383,7 @@ export default function App() {
     { id: 'products', label: 'สินค้า', icon: PackagePlus },
     { id: 'stock', label: 'สต๊อกสินค้า', icon: Box },
     { id: 'billing', label: 'บิลซื้อ/ขาย', icon: FileText },
+    { id: 'finance', label: 'การเงิน', icon: DollarSign },
     { id: 'employees', label: 'พนักงาน', icon: UserCircle },
     { id: 'reports', label: 'รายงาน', icon: BarChart3 },
     { id: 'settings', label: 'ตั้งค่า', icon: Settings },
@@ -504,7 +556,7 @@ export default function App() {
           ) : activeMenu === 'stock' ? (
             <StockModule 
               setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
-              stockData={stockData} setStockData={setStockData} productData={productData} isGlobalFetching={isGlobalFetching}
+              stockData={stockData} setStockData={setStockData} productData={productData} billingData={billingData} lockData={lockData} isGlobalFetching={isGlobalFetching}
             />
           ) : activeMenu === 'billing' ? (
             <BillingModule 
@@ -1303,7 +1355,10 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
     if (!dateStr) return '-';
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) return dateStr;
-    return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear() + 543}`;
+    const d = String(date.getDate()).padStart(2, '0');
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const y = date.getFullYear() + 543;
+    return `${d}/${m}/${y}`;
   };
 
   return (
@@ -1457,7 +1512,8 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({ id: '', date: '', dailyLimitKg: '', dailyLimitUnit: 'Kg.', note: '', items: [] });
-  const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, id: null });
+  const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, id: null, data: [] });
+  const [confirmEdit, setConfirmEdit] = useState({ isOpen: false, data: [] });
   const [searchQuery, setSearchQuery] = useState('');
   const [modalSearch, setModalSearch] = useState(''); 
   const [isViewOnly, setIsViewOnly] = useState(false); 
@@ -1542,9 +1598,36 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
     }
   };
 
-  const handleSave = async (e) => {
+  const handleSave = (e) => {
     e.preventDefault();
     if (!formData.dailyLimitKg) return addToast('กรุณาระบุโควตาน้ำหนักรับซื้อ', 'error');
+    
+    if (editingId) {
+       const oldLock = (lockData || []).find(l => l.id === editingId);
+       const oldDateStr = oldLock ? oldLock.date.split('T')[0] : '';
+       const newDateStr = formData.date.split('T')[0];
+       if (oldDateStr !== newDateStr) {
+           const associatedStocks = (stockData || []).filter(s => {
+              if (s.quotaId === editingId) return true;
+              if ((s.id || '').startsWith('TRANSF-')) {
+                 const parts = s.id.split('-');
+                 if (parts.length >= 4) {
+                    const ts = parts[1];
+                    return (stockData || []).some(ps => (ps.id || '').startsWith(`TRANSF-${ts}-`) && ps.quotaId === editingId);
+                 }
+              }
+              return false;
+           });
+           if (associatedStocks.length > 0) {
+              setConfirmEdit({ isOpen: true, data: associatedStocks });
+              return;
+           }
+       }
+    }
+    executeSave();
+  };
+
+  const executeSave = async () => {
     setLoadingMsg('กำลังบันทึกข้อมูลโควตารายวัน...');
     setIsLoading(true);
     const payload = { ...formData, _editingId: editingId };
@@ -1586,14 +1669,14 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
                
                // คืนยอดให้โควตาเก่า (ติดลบปริมาณที่ใช้ = ได้โควตาคืน)
                await requestAPI('SAVE_DATA', 'Stock', {
-                 id: `TRANSF-${ts}-1-${lock.id}`, refId: s.refId, date: formData.date,
+                 id: `TRANSF-${ts}-1-${lock.id}`, refId: s.refId, date: s.date,
                  quotaDate: lockDateStr, quotaId: lock.id, productId: s.productId, name: s.name, category: s.category || '',
                  quantity: -transferQty, unit: s.unit || 'Kg.', status: 'Active', note: `โอนยอดที่ติดลบไปโควตา ${formData.date.split('T')[0]}`
                });
                
                // หักยอดจากโควตาใหม่
                await requestAPI('SAVE_DATA', 'Stock', {
-                 id: `TRANSF-${ts}-2-${newQuotaId}`, refId: s.refId, date: formData.date,
+                 id: `TRANSF-${ts}-2-${newQuotaId}`, refId: s.refId, date: s.date,
                  quotaDate: formData.date.split('T')[0], quotaId: newQuotaId, productId: s.productId, name: s.name, category: s.category || '',
                  quantity: transferQty, unit: s.unit || 'Kg.', status: 'Active', note: `รับยอดติดลบมาจากโควตา ${lockDateStr}`
                });
@@ -1604,8 +1687,43 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
              }
            }
          }
+      } else if (editingId) {
+        // --- อัปเดตวันที่ของโควตาในรายการสต๊อกที่เกี่ยวข้อง ---
+        const oldLock = (lockData || []).find(l => l.id === editingId);
+        if (oldLock) {
+           const oldDateStr = oldLock.date.split('T')[0];
+           const newDateStr = formData.date.split('T')[0];
+           if (oldDateStr !== newDateStr) {
+             const associatedStocks = (stockData || []).filter(s => s.quotaId === editingId);
+             for (let s of associatedStocks) {
+               await requestAPI('SAVE_DATA', 'Stock', { ...s, quotaDate: newDateStr, _editingId: s.id });
+               
+               // ถ้าเป็นรายการโอนยอด ต้องไปอัปเดตข้อความ note ของคู่มันด้วย
+               if ((s.id || '').startsWith('TRANSF-')) {
+                 const parts = s.id.split('-');
+                 if (parts.length >= 4) {
+                   const ts = parts[1];
+                   const leg = parts[2]; // '1' หรือ '2'
+                   // หาคู่ของมันจาก stockData
+                   const pairLeg = leg === '1' ? '2' : '1';
+                   const pair = (stockData || []).find(ps => (ps.id || '').startsWith(`TRANSF-${ts}-${pairLeg}-`));
+                   if (pair) {
+                     let newNote = pair.note;
+                     if (pairLeg === '2') {
+                       // pair คือผู้รับยอด (Leg 2), note เดิม "รับยอดติดลบมาจากโควตา {oldDate}"
+                       newNote = `รับยอดติดลบมาจากโควตา ${newDateStr}`;
+                     } else {
+                       // pair คือผู้โอนยอด (Leg 1), note เดิม "โอนยอดที่ติดลบไปโควตา {oldDate}"
+                       newNote = `โอนยอดที่ติดลบไปโควตา ${newDateStr}`;
+                     }
+                     await requestAPI('SAVE_DATA', 'Stock', { ...pair, note: newNote, _editingId: pair.id });
+                   }
+                 }
+               }
+             }
+           }
+        }
       }
-
       addToast(editingId ? 'อัปเดตข้อมูลโควตาสำเร็จ' : 'เพิ่มข้อมูลโควตาและดึงยอดติดลบสำเร็จ', 'success');
       setIsLoading(false);
       setIsModalOpen(false);
@@ -1661,7 +1779,10 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
     if (!dateStr) return '-';
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) return dateStr;
-    return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear() + 543}`;
+    const d = String(date.getDate()).padStart(2, '0');
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const y = date.getFullYear() + 543;
+    return `${d}/${m}/${y}`;
   };
 
   let totalActiveLimit = 0;
@@ -1915,7 +2036,20 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
                         <td className="px-6 py-4 flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                           <button onClick={() => openModal(lock, true)} className="p-2 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-[12px] transition-colors" title="ดูข้อมูล"><Info className="w-[18px] h-[18px]" /></button>
                           <button onClick={() => openModal(lock, false)} className="p-2 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-[12px] transition-colors" title="แก้ไข"><Edit className="w-[18px] h-[18px]" /></button>
-                          <button onClick={() => setConfirmDelete({ isOpen: true, id: lock.id })} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-[12px] transition-colors" title="ลบ"><Trash2 className="w-[18px] h-[18px]" /></button>
+                          <button onClick={() => {
+                            const associatedStocks = (stockData || []).filter(s => {
+                               if (s.quotaId === lock.id) return true;
+                               if ((s.id || '').startsWith('TRANSF-')) {
+                                  const parts = s.id.split('-');
+                                  if (parts.length >= 4) {
+                                     const ts = parts[1];
+                                     return (stockData || []).some(ps => (ps.id || '').startsWith(`TRANSF-${ts}-`) && ps.quotaId === lock.id);
+                                  }
+                               }
+                               return false;
+                            });
+                            setConfirmDelete({ isOpen: true, id: lock.id, data: associatedStocks });
+                          }} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-[12px] transition-colors" title="ลบ"><Trash2 className="w-[18px] h-[18px]" /></button>
                         </td>
                       </tr>
                     );
@@ -2074,7 +2208,43 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
           </div>
         </div>
       )}
-      <ConfirmAlert isOpen={confirmDelete.isOpen} onCancel={() => setConfirmDelete({ isOpen: false, id: null })} onConfirm={handleDelete} title="ยืนยันลบ" text="ต้องการลบประวัติการตั้งโควตานี้ใช่ไหม" />
+      <ConfirmAlert isOpen={confirmDelete.isOpen} onCancel={() => setConfirmDelete({ isOpen: false, id: null, data: [] })} onConfirm={handleDelete} title="ยืนยันลบ" text="ต้องการลบประวัติการตั้งโควตานี้ใช่ไหม">
+        {confirmDelete.data && confirmDelete.data.length > 0 && (
+          <ImpactAnalysisTable items={confirmDelete.data.map(item => {
+                const qty = Number(item.quantity) || 0;
+                const isPositive = qty > 0;
+                const isNegative = qty < 0;
+                const isTransfer = (item.id || '').startsWith('TRANSF-') || (item.note || '').includes('โอนยอด') || (item.note || '').includes('รับยอด');
+                let typeColor = 'bg-slate-50 text-slate-600';
+                let icon = null;
+                let textLabel = 'ปรับปรุงสต๊อก';
+                if (isTransfer) { typeColor = 'bg-amber-50 text-amber-600'; textLabel = isPositive ? 'รับยอด' : 'โอนยอด'; if (isPositive) icon = <ArrowDownCircle className="w-3.5 h-3.5" />; if (isNegative) icon = <ArrowUpCircle className="w-3.5 h-3.5" />; } 
+                else if (isPositive) { typeColor = 'bg-sky-50 text-sky-600'; icon = <ArrowDownCircle className="w-3.5 h-3.5" />; textLabel = 'รับซื้อ'; } 
+                else if (isNegative) { typeColor = 'bg-emerald-50 text-emerald-600'; icon = <ArrowUpCircle className="w-3.5 h-3.5" />; textLabel = 'ขายออก'; }
+                const relatedBill = (billingData || []).find(b => b.id === item.refId);
+                return { id: item.refId || item.id, moduleName: 'สต๊อกสินค้า', typeColor, typeText: textLabel, icon, customer: relatedBill ? relatedBill.customerName : (item.note || '-'), weight: Math.abs(qty), unit: item.unit };
+          })} />
+        )}
+      </ConfirmAlert>
+
+      <ConfirmAlert isOpen={confirmEdit.isOpen} onCancel={() => setConfirmEdit({ isOpen: false, data: [] })} onConfirm={() => { setConfirmEdit({ isOpen: false, data: [] }); executeSave(); }} title="ยืนยันการแก้ไขข้อมูลโควตา" text="รายการเหล่านี้มีการผูกข้อมูลไว้ หากบันทึกการเปลี่ยนแปลงจะส่งผลกระทบดังนี้">
+        {confirmEdit.data && confirmEdit.data.length > 0 && (
+          <ImpactAnalysisTable items={confirmEdit.data.map(item => {
+                const qty = Number(item.quantity) || 0;
+                const isPositive = qty > 0;
+                const isNegative = qty < 0;
+                const isTransfer = (item.id || '').startsWith('TRANSF-') || (item.note || '').includes('โอนยอด') || (item.note || '').includes('รับยอด');
+                let typeColor = 'bg-slate-50 text-slate-600';
+                let icon = null;
+                let textLabel = 'ปรับปรุงสต๊อก';
+                if (isTransfer) { typeColor = 'bg-amber-50 text-amber-600'; textLabel = isPositive ? 'รับยอด' : 'โอนยอด'; if (isPositive) icon = <ArrowDownCircle className="w-3.5 h-3.5" />; if (isNegative) icon = <ArrowUpCircle className="w-3.5 h-3.5" />; } 
+                else if (isPositive) { typeColor = 'bg-sky-50 text-sky-600'; icon = <ArrowDownCircle className="w-3.5 h-3.5" />; textLabel = 'รับซื้อ'; } 
+                else if (isNegative) { typeColor = 'bg-emerald-50 text-emerald-600'; icon = <ArrowUpCircle className="w-3.5 h-3.5" />; textLabel = 'ขายออก'; }
+                const relatedBill = (billingData || []).find(b => b.id === item.refId);
+                return { id: item.refId || item.id, moduleName: 'สต๊อกสินค้า', typeColor, typeText: textLabel, icon, customer: relatedBill ? relatedBill.customerName : (item.note || '-'), weight: Math.abs(qty), unit: item.unit };
+          })} />
+        )}
+      </ConfirmAlert>
     </div>
   );
 }
@@ -2724,7 +2894,7 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
 // ==========================================
 // 5. STOCK MODULE (สต๊อกสินค้า)
 // ==========================================
-function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockData, setStockData, productData, isGlobalFetching }) {
+function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockData, setStockData, productData, billingData, lockData, isGlobalFetching }) {
   const stocks = stockData || []; 
   const [isFetchingTable, setIsFetchingTable] = useState(stockData === null); 
   const [visibleCount, setVisibleCount] = useState(20); 
@@ -2837,11 +3007,27 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
 
   const handleDelete = async () => {
     const idToDelete = confirmDelete.id;
-    setConfirmDelete({ isOpen: false, id: null });
+    setConfirmDelete({ isOpen: false, id: null, data: [] });
     setLoadingMsg('กำลังลบข้อมูลสต๊อก...');
     setIsLoading(true);
-    const response = await requestAPI('DELETE_DATA', 'Stock', { id: idToDelete });
-    if (response.status === 'success') {
+
+    const idsToDelete = [idToDelete];
+    if (idToDelete && idToDelete.startsWith('TRANSF-')) {
+       const parts = idToDelete.split('-');
+       if (parts.length >= 4) {
+          const ts = parts[1];
+          const pair = stocks.find(s => s.id !== idToDelete && (s.id || '').startsWith(`TRANSF-${ts}-`));
+          if (pair) idsToDelete.push(pair.id);
+       }
+    }
+
+    let success = true;
+    for (const id of idsToDelete) {
+       const response = await requestAPI('DELETE_DATA', 'Stock', { id });
+       if (response.status !== 'success') success = false;
+    }
+
+    if (success) {
       addToast('ลบรายการประวัติสต๊อกออกแล้ว (ยอดจะเปลี่ยน)', 'success');
       setIsLoading(false);
       if (reloadAllData) await reloadAllData();
@@ -2870,8 +3056,8 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
     if (!dateStr) return '-';
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) return dateStr;
-    const d = date.getDate();
-    const m = date.getMonth() + 1;
+    const d = String(date.getDate()).padStart(2, '0');
+    const m = String(date.getMonth() + 1).padStart(2, '0');
     const y = date.getFullYear() + 543;
     if (dateStr.includes('T') && dateStr.length > 10) {
       const hh = String(date.getHours()).padStart(2, '0');
@@ -2945,7 +3131,8 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
                   <th onClick={() => requestSort('quotaDate')} className="px-6 py-4 font-medium text-slate-500 text-[14px] cursor-pointer hover:bg-slate-200 transition-colors select-none">วันที่โควตา {sortConfig.key === 'quotaDate' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '⇅'}</th>
                   <th onClick={() => requestSort('id')} className="px-6 py-4 font-medium text-slate-500 text-[14px] cursor-pointer hover:bg-slate-200 transition-colors select-none">เลขที่อ้างอิง (บิล) {sortConfig.key === 'id' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '⇅'}</th>
                   <th onClick={() => requestSort('name')} className="px-6 py-4 font-medium text-slate-500 text-[14px] cursor-pointer hover:bg-slate-200 transition-colors select-none">รายการสินค้า {sortConfig.key === 'name' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '⇅'}</th>
-                  <th className="px-6 py-4 font-medium text-slate-500 text-[14px]">ประเภท/หมายเหตุ</th>
+                  <th className="px-6 py-4 font-medium text-slate-500 text-[14px]">ประเภท</th>
+                  <th className="px-6 py-4 font-medium text-slate-500 text-[14px]">หมายเหตุ</th>
                   <th onClick={() => requestSort('quantity')} className="px-6 py-4 font-medium text-slate-500 text-[14px] text-right cursor-pointer hover:bg-slate-200 transition-colors select-none">จำนวน (เข้า/ออก) {sortConfig.key === 'quantity' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '⇅'}</th>
                   <th className="px-6 py-4 font-medium text-slate-500 text-[14px] text-right">จัดการ</th>
                 </tr>
@@ -2958,6 +3145,7 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
                       <td className="px-6 py-5"><div className="h-4 bg-slate-200 rounded w-24"></div></td>
                       <td className="px-6 py-5"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
                       <td className="px-6 py-5"><div className="h-4 bg-slate-200 rounded w-32"></div></td>
+                      <td className="px-6 py-5"><div className="h-6 bg-slate-200 rounded-full w-24"></div></td>
                       <td className="px-6 py-5"><div className="h-4 bg-slate-200 rounded w-28"></div></td>
                       <td className="px-6 py-5"><div className="h-6 bg-slate-200 rounded-full w-20 ml-auto"></div></td>
                       <td className="px-6 py-5 flex justify-end gap-1"><div className="h-8 bg-slate-200 rounded w-24"></div></td>
@@ -2969,6 +3157,9 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
                     const displayUnit = s.unit || (fallbackProduct ? fallbackProduct.unit : 'กก.');
                     const isPositive = Number(s.quantity) > 0;
                     const isNegative = Number(s.quantity) < 0;
+                    const isTransferByNote = s.note && (s.note.includes('โอนยอด') || s.note.includes('รับยอด'));
+                    const isTransferById = s.id && String(s.id).startsWith('TRANSF-');
+                    const isTransfer = isTransferByNote || isTransferById;
                     
                     return (
                     <tr key={`${s.id}-${index}`} onClick={() => openModal(s, true)} className="hover:bg-slate-50/70 transition-colors cursor-pointer">
@@ -2976,6 +3167,14 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
                       <td className="px-6 py-4 text-[14px] font-medium text-emerald-600">{s.quotaDate ? formatDateTh(s.quotaDate) : '-'}</td>
                       <td className="px-6 py-4 font-mono-code text-[15px] font-bold text-sky-500">{s.refId || s.id}</td>
                       <td className="px-6 py-4 text-[15px] text-slate-800 font-medium">{s.name}</td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[13px] font-bold
+                          ${isTransfer ? 'bg-amber-50 text-amber-600' : isPositive ? 'bg-sky-50 text-sky-600' : isNegative ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-600'}
+                        `}>
+                          {isPositive ? <ArrowDownCircle className="w-3.5 h-3.5" /> : isNegative ? <ArrowUpCircle className="w-3.5 h-3.5" /> : null}
+                          {isTransfer ? (isPositive ? 'รับยอด' : 'โอนยอด') : (isPositive ? 'รับซื้อ (จ่าย)' : isNegative ? 'ขายออก (รับ)' : 'ปรับปรุงสต๊อก')}
+                        </span>
+                      </td>
                       <td className="px-6 py-4 text-[14px] text-slate-600 truncate max-w-[200px]" title={s.note}>{s.note || '-'}</td>
                       <td className="px-6 py-4 text-[15px] font-bold text-right">
                         <span className={`px-3 py-1.5 rounded-lg font-mono-code ${isPositive ? 'bg-emerald-50 text-emerald-600' : isNegative ? 'bg-rose-50 text-rose-600' : 'bg-slate-100 text-slate-600'}`}>
@@ -2988,14 +3187,71 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
                         {!(s.refId && (s.refId.startsWith('REC') || s.refId.startsWith('INV'))) && (
                           <button onClick={() => openModal(s, false)} className="p-2 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-[12px] transition-colors" title="แก้ไขรายการ"><Edit className="w-[18px] h-[18px]" /></button>
                         )}
-                        <button onClick={() => setConfirmDelete({ isOpen: true, id: s.id })} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-[12px] transition-colors" title="ลบรายการนี้"><Trash2 className="w-[18px] h-[18px]" /></button>
+                        <button onClick={() => {
+                            const data = [];
+                            
+                            const processStockItemForData = (item) => {
+                                const qty = Number(item.quantity) || 0;
+                                const isPositive = qty > 0;
+                                const isNegative = qty < 0;
+                                const isTransfer = (item.id || '').startsWith('TRANSF-') || (item.note || '').includes('โอนยอด') || (item.note || '').includes('รับยอด');
+                                let typeColor = 'bg-slate-50 text-slate-600';
+                                let icon = null;
+                                let textLabel = 'ปรับปรุงสต๊อก';
+                                if (isTransfer) { typeColor = 'bg-amber-50 text-amber-600'; textLabel = isPositive ? 'รับยอด' : 'โอนยอด'; if (isPositive) icon = <ArrowDownCircle className="w-3.5 h-3.5" />; if (isNegative) icon = <ArrowUpCircle className="w-3.5 h-3.5" />; } 
+                                else if (isPositive) { typeColor = 'bg-sky-50 text-sky-600'; icon = <ArrowDownCircle className="w-3.5 h-3.5" />; textLabel = 'รับซื้อ'; } 
+                                else if (isNegative) { typeColor = 'bg-emerald-50 text-emerald-600'; icon = <ArrowUpCircle className="w-3.5 h-3.5" />; textLabel = 'ขายออก'; }
+
+                                const customerName = (item.refId && (item.refId.startsWith('REC') || item.refId.startsWith('INV'))) ? ((billingData || []).find(b => b.id === item.refId)?.customerName || '-') : (item.note || '-');
+
+                                data.push({
+                                    id: item.refId || item.id,
+                                    moduleName: 'สต๊อกสินค้า',
+                                    typeColor,
+                                    typeText: textLabel,
+                                    icon,
+                                    customer: customerName,
+                                    weight: Math.abs(qty),
+                                    unit: item.unit || 'กก.'
+                                });
+
+                                if (item.quotaId) {
+                                    const relatedLock = (lockData || []).find(l => l.id === item.quotaId);
+                                    if (relatedLock) {
+                                        data.push({
+                                            id: relatedLock.id,
+                                            moduleName: 'โควตาล็อกน้ำหนัก',
+                                            typeColor: 'bg-indigo-50 text-indigo-600',
+                                            typeText: 'ตั้งโควตา',
+                                            icon: <Lock className="w-3.5 h-3.5" />,
+                                            customer: relatedLock.note || '-',
+                                            weight: relatedLock.dailyLimitKg,
+                                            unit: relatedLock.dailyLimitUnit || 'กก.'
+                                        });
+                                    }
+                                }
+                            };
+
+                            processStockItemForData(s);
+
+                            if ((s.id || '').startsWith('TRANSF-')) {
+                               const parts = s.id.split('-');
+                               if (parts.length >= 4) {
+                                  const ts = parts[1];
+                                  const pair = stocks.find(ps => ps.id !== s.id && (ps.id || '').startsWith(`TRANSF-${ts}-`));
+                                  if (pair) processStockItemForData(pair);
+                               }
+                            }
+                            
+                            setConfirmDelete({ isOpen: true, id: s.id, data });
+                        }} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-[12px] transition-colors" title="ลบรายการนี้"><Trash2 className="w-[18px] h-[18px]" /></button>
                       </td>
                     </tr>
                   )
                 })
                 )}
                 {!isFetchingTable && filteredStocks.length === 0 && (
-                  <tr><td colSpan="7" className="text-center p-12 text-slate-400 text-[15px]">ไม่พบประวัติการเคลื่อนไหวสต๊อก</td></tr>
+                  <tr><td colSpan="8" className="text-center p-12 text-slate-400 text-[15px]">ไม่พบประวัติการเคลื่อนไหวสต๊อก</td></tr>
                 )}
               </tbody>
             </table>
@@ -3132,7 +3388,9 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
           </div>
         </div>
       )}
-      <ConfirmAlert isOpen={confirmDelete.isOpen} onCancel={() => setConfirmDelete({ isOpen: false, id: null })} onConfirm={handleDelete} title="ยืนยันลบรายการ" text="ยอดรวมของสินค้านี้จะถูกหักลบ/คืนค่าตามรายการนี้ ต้องการลบใช่ไหม?" />
+      <ConfirmAlert isOpen={confirmDelete.isOpen} onCancel={() => setConfirmDelete({ isOpen: false, id: null, data: [] })} onConfirm={handleDelete} title="ยืนยันลบรายการ" text="ยอดรวมของสินค้านี้จะถูกหักลบ/คืนค่าตามรายการนี้ ต้องการลบใช่ไหม?">
+        {confirmDelete.data && confirmDelete.data.length > 0 && <ImpactAnalysisTable items={confirmDelete.data} />}
+      </ConfirmAlert>
     </div>
   );
 }
@@ -3146,7 +3404,7 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
   const [visibleCount, setVisibleCount] = useState(20); 
   const [searchQuery, setSearchQuery] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
-  const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, id: null });
+  const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, id: null, data: [] });
 
   const headerRef = useRef(null);
   const filterRef = useRef(null);
@@ -3228,8 +3486,8 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
     if (!dateStr) return '-';
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) return dateStr;
-    const d = date.getDate();
-    const m = date.getMonth() + 1;
+    const d = String(date.getDate()).padStart(2, '0');
+    const m = String(date.getMonth() + 1).padStart(2, '0');
     const y = date.getFullYear() + 543;
     const hh = String(date.getHours()).padStart(2, '0');
     const mm = String(date.getMinutes()).padStart(2, '0');
@@ -3343,7 +3601,38 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
                       <td className="px-6 py-4 flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                         <button className="p-2 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-[12px] transition-colors" title="พิมพ์บิล"><Printer className="w-[18px] h-[18px]" /></button>
                         <button onClick={() => openBillModal && openBillModal(b, false)} className="p-2 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-[12px] transition-colors" title="แก้ไข"><Edit className="w-[18px] h-[18px]" /></button>
-                        <button onClick={() => setConfirmDelete({ isOpen: true, id: b.id })} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-[12px] transition-colors" title="ลบ"><Trash2 className="w-[18px] h-[18px]" /></button>
+                        <button onClick={() => {
+                            const data = [];
+                            const isPositiveBill = b.type === 'BUY';
+                            const totalW = (b.items || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+                            
+                            data.push({
+                                id: b.id,
+                                moduleName: 'บิลซื้อ/ขาย',
+                                typeColor: isPositiveBill ? 'bg-sky-50 text-sky-600' : 'bg-emerald-50 text-emerald-600',
+                                typeText: isPositiveBill ? 'รับซื้อ' : 'ขายออก',
+                                icon: isPositiveBill ? <ArrowDownCircle className="w-3.5 h-3.5" /> : <ArrowUpCircle className="w-3.5 h-3.5" />,
+                                customer: b.customerName || '-',
+                                weight: totalW,
+                                unit: 'กก.'
+                            });
+
+                            const relatedStocks = (stockData || []).filter(s => s.refId === b.id);
+                            for (let s of relatedStocks) {
+                                data.push({
+                                    id: s.id,
+                                    moduleName: 'สต๊อกสินค้า',
+                                    typeColor: isPositiveBill ? 'bg-sky-50 text-sky-600' : 'bg-emerald-50 text-emerald-600',
+                                    typeText: isPositiveBill ? 'รับซื้อ' : 'ขายออก',
+                                    icon: isPositiveBill ? <ArrowDownCircle className="w-3.5 h-3.5" /> : <ArrowUpCircle className="w-3.5 h-3.5" />,
+                                    customer: b.customerName || '-',
+                                    weight: Math.abs(Number(s.quantity) || 0),
+                                    unit: s.unit || 'กก.'
+                                });
+                            }
+
+                            setConfirmDelete({ isOpen: true, id: b.id, data });
+                        }} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-[12px] transition-colors" title="ลบ"><Trash2 className="w-[18px] h-[18px]" /></button>
                       </td>
                     </tr>
                     );
@@ -3360,8 +3649,9 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
           )}
         </div>
       </div>
-      
-      <ConfirmAlert isOpen={confirmDelete.isOpen} onCancel={() => setConfirmDelete({ isOpen: false, id: null })} onConfirm={handleDelete} title="ยืนยันลบ" text="ต้องการลบบิลและคืนค่ายอดสต๊อกใช่ไหม" />
+      <ConfirmAlert isOpen={confirmDelete.isOpen} onCancel={() => setConfirmDelete({ isOpen: false, id: null, data: [] })} onConfirm={handleDelete} title="ยืนยันลบ" text="ต้องการลบบิลและคืนค่ายอดสต๊อกใช่ไหม">
+        {confirmDelete.data && confirmDelete.data.length > 0 && <ImpactAnalysisTable items={confirmDelete.data} />}
+      </ConfirmAlert>
     </div>
   );
 }
