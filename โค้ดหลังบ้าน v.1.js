@@ -26,6 +26,9 @@ function doPost(e) {
       case 'GET_DATA':
         result = getData(sheetName);
         break;
+      case 'GET_ALL_DATA':
+        result = getAllData(data.sheetNames);
+        break;
       case 'SAVE_DATA':
         result = saveData(sheetName, data);
         break;
@@ -147,6 +150,16 @@ function getData(sheetName) {
     return dateB - dateA; // มากไปน้อย (ใหม่ไปเก่า)
   });
 
+  return { status: 'success', data: result };
+}
+
+function getAllData(sheetNames) {
+  const result = {};
+  for (let i = 0; i < sheetNames.length; i++) {
+    const sheetName = sheetNames[i];
+    const dataRes = getData(sheetName);
+    result[sheetName] = dataRes.status === 'success' ? dataRes.data : [];
+  }
   return { status: 'success', data: result };
 }
 

@@ -11,7 +11,7 @@ import {
 // --- Shared Components ---
 
 const FullPageLoader = ({ message }) => (
-  <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center font-body">
+  <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-[9999] flex flex-col items-center justify-center font-body">
     <Loader2 className="w-12 h-12 text-sky-500 animate-spin mb-4" />
     <div className="bg-white px-6 py-3 rounded-[16px] shadow-[0_8px_32px_rgba(0,0,0,0.04)] font-medium text-slate-800 border border-slate-100">
       {message || 'กำลังประมวลผล...'}
@@ -40,21 +40,152 @@ const Toast = ({ toasts, removeToast }) => (
 const ConfirmAlert = ({ isOpen, title, text, onConfirm, onCancel }) => {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-      <div className="bg-white rounded-[24px] p-[28px] max-w-sm w-full shadow-[0_8px_32px_rgba(0,0,0,0.04)] transform scale-100 flex flex-col items-center text-center">
-        <div className="w-16 h-16 rounded-full bg-rose-50 flex items-center justify-center mb-4">
-          <AlertCircle className="w-8 h-8 text-rose-500" />
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+      <div className="bg-white rounded-[24px] w-full max-w-sm shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div className="p-6 text-center">
+          <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4 text-rose-500"><AlertTriangle className="w-8 h-8" /></div>
+          <h3 className="text-[20px] font-bold text-slate-800 mb-2">{title}</h3>
+          <p className="text-[15px] text-slate-500 mb-6">{text}</p>
+          <div className="flex gap-3"><button onClick={onCancel} className="flex-1 py-3 bg-slate-50 text-slate-600 font-medium rounded-xl hover:bg-slate-100 transition-colors">ยกเลิก</button><button onClick={onConfirm} className="flex-1 py-3 bg-rose-500 text-white font-medium rounded-xl hover:bg-rose-600 transition-colors shadow-sm">ยืนยัน</button></div>
         </div>
-        <h3 className="font-display text-[24px] font-bold tracking-[-0.01em] text-slate-800 mb-2">{title}</h3>
-        <p className="font-body text-[16px] text-slate-600 mb-8 leading-[1.6]">{text}</p>
-        <div className="flex gap-3 w-full font-body">
-          <button onClick={onCancel} className="flex-1 h-[48px] px-4 bg-slate-50 border border-slate-200 text-slate-700 rounded-[16px] hover:bg-slate-100 font-medium active:scale-95 transition-transform">
-            ยกเลิก
-          </button>
-          <button onClick={onConfirm} className="flex-1 h-[48px] px-4 bg-rose-500 text-white rounded-[16px] hover:bg-rose-600 font-medium active:scale-95 transition-transform shadow-sm">
-            ยืนยันการลบ
-          </button>
+      </div>
+    </div>
+  );
+};
+
+const SharedProductPriceTable = ({ 
+  items, 
+  productData, 
+  isViewOnly, 
+  priceField, 
+  priceColumnLabel, 
+  onAddItem, 
+  onRemoveItem, 
+  onPriceChange 
+}) => {
+  const [productSearch, setProductSearch] = useState('');
+  const [tableSearch, setTableSearch] = useState('');
+  const [isProductDropdownOpen, setIsProductDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) setIsProductDropdownOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const availableProducts = (productData || []).filter(p => !(items || []).find(i => i.id === p.id));
+  const filteredAvailable = availableProducts.filter(p => ((p.name || '').toLowerCase().includes(productSearch.toLowerCase()) || (p.id || '').toLowerCase().includes(productSearch.toLowerCase())));
+  
+  const filteredItems = (items || []).filter(item => {
+    if (!tableSearch) return true;
+    const q = tableSearch.toLowerCase();
+    return (item.id || '').toLowerCase().includes(q) || (item.name || '').toLowerCase().includes(q) || (item.category || '').toLowerCase().includes(q);
+  });
+
+  return (
+    <div className="bg-white border border-slate-200/60 rounded-[20px] shadow-sm flex flex-col shrink-0 overflow-hidden mt-4">
+      <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row gap-4 shrink-0 bg-white">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+          <input type="text" value={tableSearch} onChange={(e) => setTableSearch(e.target.value)} placeholder="ค้นหารายการในตาราง..." className="w-full h-[44px] pl-10 pr-4 bg-slate-50 border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all" />
         </div>
+        <div className="relative w-full md:w-[320px]" ref={dropdownRef}>
+          <div className="relative">
+            <PlusCircle className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500" />
+            <input disabled={isViewOnly} type="text" value={productSearch} onChange={(e) => { setProductSearch(e.target.value); setIsProductDropdownOpen(true); }} onFocus={() => setIsProductDropdownOpen(true)} className="w-full h-[44px] pl-9 pr-4 bg-emerald-50/20 border border-emerald-200 text-emerald-600 rounded-[12px] text-[14px] font-medium outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all disabled:bg-slate-50 disabled:text-slate-400 placeholder:text-emerald-600" placeholder="+ ดึงสินค้าอื่นเข้ารายการวันนี้" />
+          </div>
+          {isProductDropdownOpen && !isViewOnly && (
+            <div className="absolute top-full left-0 mt-2 w-full bg-white border border-slate-100 shadow-[0_10px_40px_rgba(0,0,0,0.08)] rounded-[16px] overflow-hidden z-50">
+              <div className="max-h-[280px] overflow-y-auto p-2 scrollbar-hide flex flex-col gap-1">
+                {filteredAvailable.length === 0 ? (
+                  <div className="px-4 py-3 text-[13px] text-slate-400 text-center">ไม่พบสินค้าอื่นให้เพิ่มแล้ว</div>
+                ) : (
+                  filteredAvailable.map(p => (
+                    <button key={`add-${p.id}`} type="button" onClick={() => { onAddItem(p); setProductSearch(''); setIsProductDropdownOpen(false); }} className="w-full text-left px-4 py-3 hover:bg-slate-50 rounded-[12px] transition-colors flex items-center justify-between group">
+                      <div className="flex items-center justify-between w-full">
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[14px] font-medium text-slate-700 group-hover:text-emerald-600 transition-colors">{p.name}</span>
+                            {p.status !== 'Active' && <span className="text-[10px] bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded font-bold">Inactive</span>}
+                          </div>
+                          <span className="text-[12px] text-slate-400 font-mono-code">{p.id}</span>
+                        </div>
+                        <Plus className="w-4 h-4 text-slate-300 group-hover:text-emerald-500 transition-colors" />
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="overflow-x-auto bg-white">
+        <table className="w-full text-left border-collapse whitespace-nowrap min-w-[700px]">
+          <thead className="bg-slate-50 border-b border-slate-100">
+            <tr>
+              <th className="px-6 py-4 font-medium text-slate-500 text-[14px]">รหัสสินค้า</th>
+              <th className="px-6 py-4 font-medium text-slate-500 text-[14px]">ชื่อสินค้า</th>
+              <th className="px-6 py-4 font-medium text-slate-500 text-[14px] text-center">หมวดหมู่</th>
+              <th className="px-6 py-4 font-medium text-slate-500 text-[14px] text-center">ราคาอ้างอิง (DB)</th>
+              <th className="px-6 py-4 font-bold text-sky-500 text-[15px] bg-sky-50/20 w-[180px] text-center border-l border-r border-sky-100/50">{priceColumnLabel}</th>
+              <th className="px-6 py-4 font-medium text-slate-500 text-[14px] text-center w-[80px]">นำออก</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {filteredItems.length === 0 ? (
+              <tr><td colSpan="6" className="text-center p-8 text-slate-400 text-[14px]">ไม่มีรายการสินค้า</td></tr>
+            ) : (
+              filteredItems.map((item, index) => {
+                const refProduct = (productData || []).find(p => p.id === item.id);
+                return (
+                  <tr key={`${item.id}-${index}`} className="hover:bg-slate-50/50">
+                    <td className="px-6 py-3 font-mono-code text-[14px] font-bold text-slate-400">{item.id}</td>
+                    <td className="px-6 py-3 text-[14px] font-medium text-slate-800">{item.name}</td>
+                    <td className="px-6 py-3 text-center">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-slate-100 text-[12px] font-medium text-slate-600">{item.category}</span>
+                    </td>
+                    <td className="px-6 py-3 text-[14px] text-slate-500 font-medium text-center">{Number(refProduct?.buyPrice || 0).toLocaleString()}</td>
+                    <td className="px-6 py-2 bg-sky-50/10 border-l border-r border-sky-100/30">
+                      <div className="flex items-center justify-center gap-2">
+                        <input 
+                          id={`shared-price-input-${index}`}
+                          disabled={isViewOnly}
+                          type="number"
+                          value={item[priceField] || ''}
+                          onChange={(e) => onPriceChange(item.id, e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === 'ArrowDown' || (e.key === 'Tab' && !e.shiftKey)) {
+                              e.preventDefault();
+                              const nextInput = document.getElementById(`shared-price-input-${index + 1}`);
+                              if (nextInput) { nextInput.focus(); nextInput.select(); }
+                            } else if (e.key === 'ArrowUp' || (e.key === 'Tab' && e.shiftKey)) {
+                              e.preventDefault();
+                              const prevInput = document.getElementById(`shared-price-input-${index - 1}`);
+                              if (prevInput) { prevInput.focus(); prevInput.select(); }
+                            }
+                          }}
+                          className="w-[100px] h-[38px] px-3 text-right bg-white border border-sky-200 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 rounded-[8px] font-mono-code text-[14px] font-bold text-sky-700 outline-none disabled:bg-slate-50 disabled:text-slate-400 shadow-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          placeholder="0.00"
+                        />
+                        <span className="text-[13px] text-slate-500 w-8">/{item.unit || 'กก.'}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-3 text-center">
+                      <button disabled={isViewOnly} type="button" tabIndex="-1" onClick={() => onRemoveItem(item.id)} className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <X className="w-5 h-5 mx-auto" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -131,10 +262,17 @@ const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzvTHxvoyfPAz
 
 // --- Main Application ---
 export default function App() {
-  const [activeMenu, setActiveMenu] = useState('daily_prices');
+  const [activeMenu, setActiveMenu] = useState(() => {
+    return localStorage.getItem('shk_active_menu') || 'daily_prices';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('shk_active_menu', activeMenu);
+  }, [activeMenu]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState('');
+  const [isGlobalFetching, setIsGlobalFetching] = useState(false);
   
   const [customerData, setCustomerData] = useState(null); 
   const [productData, setProductData] = useState(null);   
@@ -150,12 +288,24 @@ export default function App() {
 
   // ดึง Data ทั้งหมด
   const loadAllData = async () => {
-    requestAPI('GET_DATA', 'Customers').then(res => setCustomerData(res.status === 'success' ? res.data : []));
-    requestAPI('GET_DATA', 'Products').then(res => setProductData(res.status === 'success' ? res.data : []));
-    requestAPI('GET_DATA', 'Stock').then(res => setStockData(res.status === 'success' ? res.data : []));
-    requestAPI('GET_DATA', 'DailyLocks').then(res => setLockData(res.status === 'success' ? res.data : []));
-    requestAPI('GET_DATA', 'DailyPrices').then(res => setDailyPriceData(res.status === 'success' ? res.data : [])); 
-    requestAPI('GET_DATA', 'Billing').then(res => setBillingData(res.status === 'success' ? res.data : []));
+    setIsGlobalFetching(true);
+    try {
+      const res = await requestAPI('GET_ALL_DATA', '', { sheetNames: ['Customers', 'Products', 'Stock', 'DailyLocks', 'DailyPrices', 'Billing'] });
+      if (res.status === 'success') {
+        setCustomerData(res.data['Customers'] || []);
+        setProductData(res.data['Products'] || []);
+        setStockData(res.data['Stock'] || []);
+        setLockData(res.data['DailyLocks'] || []);
+        setDailyPriceData(res.data['DailyPrices'] || []);
+        setBillingData(res.data['Billing'] || []);
+      } else {
+        addToast('โหลดข้อมูลล้มเหลว: ' + res.message, 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      addToast('เกิดข้อผิดพลาดในการเชื่อมต่อ', 'error');
+    }
+    setIsGlobalFetching(false);
   };
 
   useEffect(() => {
@@ -192,7 +342,13 @@ export default function App() {
       return new Promise((resolve) => {
         setTimeout(() => {
           let currentData = JSON.parse(localStorage.getItem(sheetName) || '[]');
-          if (action === 'GET_DATA') resolve({ status: 'success', data: currentData });
+          if (action === 'GET_ALL_DATA') {
+            const result = {};
+            const sheetNames = payload.sheetNames || [];
+            sheetNames.forEach(sn => result[sn] = JSON.parse(localStorage.getItem(sn) || '[]'));
+            resolve({ status: 'success', data: result });
+          }
+          else if (action === 'GET_DATA') resolve({ status: 'success', data: currentData });
           else if (action === 'SAVE_DATA') {
             const index = currentData.findIndex(item => item.id === payload.id);
             if (index >= 0) currentData[index] = payload;
@@ -327,33 +483,34 @@ export default function App() {
           {activeMenu === 'daily_prices' ? (
             <DailyPriceModule 
               setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
-              dailyPriceData={dailyPriceData} setDailyPriceData={setDailyPriceData} productData={productData}
+              dailyPriceData={dailyPriceData} setDailyPriceData={setDailyPriceData} productData={productData} isGlobalFetching={isGlobalFetching}
             />
           ) : activeMenu === 'customers' ? (
             <CustomerModule 
               setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
-              customerData={customerData} setCustomerData={setCustomerData}
+              customerData={customerData} setCustomerData={setCustomerData} isGlobalFetching={isGlobalFetching}
             />
           ) : activeMenu === 'lock' ? (
             <LockWeightModule 
               setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
-              lockData={lockData} setLockData={setLockData} stockData={stockData} billingData={billingData} openBillModal={openBillModal}
+              lockData={lockData} setLockData={setLockData} stockData={stockData} billingData={billingData} 
+              openBillModal={openBillModal} productData={productData} reloadAllData={loadAllData} isGlobalFetching={isGlobalFetching}
             />
           ) : activeMenu === 'products' ? (
             <ProductModule 
               setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
-              productData={productData} setProductData={setProductData}
+              productData={productData} setProductData={setProductData} isGlobalFetching={isGlobalFetching}
             />
           ) : activeMenu === 'stock' ? (
             <StockModule 
               setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
-              stockData={stockData} setStockData={setStockData} productData={productData} 
+              stockData={stockData} setStockData={setStockData} productData={productData} isGlobalFetching={isGlobalFetching}
             />
           ) : activeMenu === 'billing' ? (
             <BillingModule 
               setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
               billingData={billingData} setBillingData={setBillingData} customerData={customerData} productData={productData} 
-              dailyPriceData={dailyPriceData} stockData={stockData} setStockData={setStockData} openBillModal={openBillModal}
+              dailyPriceData={dailyPriceData} stockData={stockData} setStockData={setStockData} openBillModal={openBillModal} isGlobalFetching={isGlobalFetching} reloadAllData={loadAllData}
             />
           ) : (
             <div className="p-4 md:p-8 h-full">
@@ -388,12 +545,12 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
   const bills = billingData || [];
 
   // ฟังก์ชันช่วยหาโควตาที่เหลือของแต่ละวัน
-  const getQuotaRemaining = (dateStr, excludeBillId = null) => {
-    const refLock = (lockData || []).find(l => (l.date || '').startsWith(dateStr));
+  const getQuotaRemaining = (lockId, lockDateStr, excludeBillId = null) => {
+    const refLock = (lockData || []).find(l => l.id === lockId) || (lockData || []).find(l => (l.date || '').startsWith(lockDateStr));
     const limit = refLock ? Number(refLock.dailyLimitKg) || 0 : 0;
     const used = (stockData || [])
       .filter(s => {
-        const matchDate = s.quotaDate === dateStr || (!s.quotaDate && (s.date || '').startsWith(dateStr));
+        const matchDate = s.quotaId ? (s.quotaId === lockId) : (s.quotaDate === lockDateStr || (!s.quotaDate && (s.date || '').startsWith(lockDateStr)));
         return matchDate && (s.refId || '').startsWith('REC') && s.refId !== excludeBillId;
       })
       .reduce((sum, s) => sum + (Number(s.quantity) || 0), 0);
@@ -417,6 +574,7 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
   const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
   const [customerSearch, setCustomerSearch] = useState(config.bill ? config.bill.customerName : '');
   const customerRef = useRef(null);
+  const [shakeQuotaBtn, setShakeQuotaBtn] = useState(false);
 
   // ดึงราคาสินค้าอิงจาก "วันที่ทำรายการ (date)"
   const priceDateStr = formData.date ? formData.date.split('T')[0] : '';
@@ -425,45 +583,66 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
 
   // กำหนดค่า Default โควตาวันเก่าสุดที่ยังว่าง (ตอนเปิดบิลใหม่)
   useEffect(() => {
-    if (!config.bill && formData.quotaDates.length === 0) {
+    if (!config.bill && formData.quotaDates.length === 0 && lockData) {
       let oldestAvailable = new Date().toISOString().split('T')[0];
-      const sortedLocks = [...(lockData || [])].sort((a, b) => new Date(a.date) - new Date(b.date));
+      const sortedLocks = [...lockData].sort((a, b) => new Date(a.date) - new Date(b.date));
+      let defaultId = oldestAvailable;
       for (let lock of sortedLocks) {
         const qDate = lock.date.split('T')[0];
-        if (getQuotaRemaining(qDate) > 0) {
-          oldestAvailable = qDate; break;
+        if (getQuotaRemaining(lock.id, qDate) > 0 && !(lock.note || '').trim()) {
+          defaultId = lock.id; break;
         }
       }
-      setFormData(prev => ({ ...prev, quotaDates: [oldestAvailable] }));
+      setFormData(prev => ({ ...prev, quotaDates: [defaultId] }));
     }
   }, [config.bill, lockData, stockData]);
 
+  // ซิงค์ข้อมูลบิลเก่าๆ ให้เปลี่ยนจากใช้วันที่ เป็นใช้ ID ของโควตา (เพื่อรองรับ 2 โควตาในวันเดียวกัน)
+  useEffect(() => {
+    if (lockData && lockData.length > 0 && formData.quotaDates.length > 0) {
+      const hasDateStrings = formData.quotaDates.some(q => !q.startsWith('LOCK'));
+      if (hasDateStrings) {
+        const upgraded = formData.quotaDates.map(q => {
+          if (q.startsWith('LOCK')) return q;
+          const match = lockData.find(l => (l.date || '').startsWith(q));
+          return match ? match.id : q;
+        });
+        if (JSON.stringify(upgraded) !== JSON.stringify(formData.quotaDates)) {
+          setFormData(prev => ({ ...prev, quotaDates: upgraded }));
+        }
+      }
+    }
+  }, [lockData, formData.quotaDates]);
+
   // รายการโควตาทั้งหมดสำหรับให้เลือกใน Dropdown
-  const availableQuotas = (lockData || []).map(lock => {
-    const lockDateStr = lock.date ? lock.date.split('T')[0] : '';
-    const limit = Number(lock.dailyLimitKg) || 0;
-    const remaining = getQuotaRemaining(lockDateStr, editingId);
-    return { dateStr: lockDateStr, limit, remaining, unit: lock.dailyLimitUnit || 'Kg.' };
-  }).sort((a, b) => new Date(b.dateStr) - new Date(a.dateStr));
+  const availableQuotas = (lockData || [])
+    .map(lock => {
+      const lockDateStr = lock.date ? lock.date.split('T')[0] : '';
+      const limit = Number(lock.dailyLimitKg) || 0;
+      const remaining = getQuotaRemaining(lock.id, lockDateStr, editingId);
+      return { id: lock.id, dateStr: lockDateStr, limit, remaining, unit: lock.dailyLimitUnit || 'Kg.', note: lock.note || '' };
+    })
+    .filter(q => q.remaining > 0 || formData.quotaDates.includes(q.id) || formData.quotaDates.includes(q.dateStr))
+    .sort((a, b) => new Date(b.dateStr) - new Date(a.dateStr));
 
   // --- ฟังก์ชันกดเพิ่มวันที่โควตา (แบบฉลาด ไม่ข้ามวัน) ---
   const handleAddQuotaDate = () => {
-    // เรียงวันจากเก่าไปใหม่
-    const sortedQuotas = [...availableQuotas].sort((a, b) => new Date(a.dateStr) - new Date(b.dateStr));
+    const unselectedQuotas = availableQuotas.filter(q => !formData.quotaDates.includes(q.id));
     
-    // หาวันที่ "ยังไม่ถูกเลือก" และ "ยังมีโควตาเหลือ" เป็นอันดับแรก
-    const nextQ = sortedQuotas.find(q => !formData.quotaDates.includes(q.dateStr) && q.remaining > 0);
-    
-    let dateToAdd = priceDateStr || new Date().toISOString().split('T')[0];
-    if (nextQ) {
-      dateToAdd = nextQ.dateStr;
-    } else {
-       // ถ้าไม่มีวันไหนเหลือโควตาเลย ให้หาวันที่ยังไม่ถูกเลือกมาแปะไว้ก่อน
-       const fallbackQ = sortedQuotas.find(q => !formData.quotaDates.includes(q.dateStr));
-       if (fallbackQ) dateToAdd = fallbackQ.dateStr;
+    if (unselectedQuotas.length === 0) {
+      setShakeQuotaBtn(true);
+      setTimeout(() => setShakeQuotaBtn(false), 500);
+      return addToast('ไม่มีโควตารับซื้อในระบบให้เลือกเพิ่มแล้ว', 'error');
     }
+
+    const sortedUnselected = [...unselectedQuotas].sort((a, b) => new Date(a.dateStr) - new Date(b.dateStr));
+    const nextQ = sortedUnselected.find(q => q.remaining > 0 && !(q.note || '').trim());
     
-    setFormData(prev => ({...prev, quotaDates: [...prev.quotaDates, dateToAdd]}));
+    const lockToAdd = nextQ || sortedUnselected[0];
+    
+    if (lockToAdd) {
+      setFormData(prev => ({...prev, quotaDates: [...prev.quotaDates, lockToAdd.id]}));
+    }
   };
 
   // --- Real-time Allocation Logic (ระบบฉีกโควตาอัตโนมัติ) ---
@@ -474,25 +653,80 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
     let remainingToAllocate = totalBillWeight;
     let allocations = [];
 
-    const safeQuotaDates = formData.quotaDates.length > 0 ? formData.quotaDates : [priceDateStr];
-
-    for (let i = 0; i < safeQuotaDates.length; i++) {
-      const qDate = safeQuotaDates[i];
-      const isLast = i === safeQuotaDates.length - 1;
-      const capacity = getQuotaRemaining(qDate, editingId);
+    const explicitlySelected = formData.quotaDates.length > 0 ? formData.quotaDates : [priceDateStr];
+    let currentQuotas = [...explicitlySelected];
+    
+    // Check if the first explicitly selected quota is a special quota (has note)
+    const firstQIdOrDate = explicitlySelected[0];
+    const firstRefLock = (lockData || []).find(l => l.id === firstQIdOrDate) || (lockData || []).find(l => (l.date || '').startsWith(firstQIdOrDate));
+    const disableAutoFill = firstRefLock ? !!(firstRefLock.note || '').trim() : false;
+    
+    let i = 0;
+    while (i < currentQuotas.length && remainingToAllocate > 0) {
+      const qIdOrDate = currentQuotas[i];
+      const refLock = (lockData || []).find(l => l.id === qIdOrDate) || (lockData || []).find(l => (l.date || '').startsWith(qIdOrDate));
+      const qDate = refLock ? refLock.date.split('T')[0] : qIdOrDate;
+      const qId = refLock ? refLock.id : qIdOrDate;
+      const capacity = getQuotaRemaining(qId, qDate, editingId);
+      
+      const isExplicitLast = i === explicitlySelected.length - 1;
       
       let allocateHere = 0;
-      if (remainingToAllocate > 0) {
-        if (isLast) {
+      
+      if (isExplicitLast && remainingToAllocate > capacity) {
+        if (disableAutoFill) {
+          // ถ้าโควตาแรกที่เลือกเองมี "หมายเหตุ" (รายการพิเศษ) จะปิดระบบ Auto-fill และปล่อยให้ยอดที่เหลือดันโควตาสุดท้ายให้ติดลบไปเลย
           allocateHere = remainingToAllocate;
-          remainingToAllocate = 0;
         } else {
-          allocateHere = Math.min(Math.max(0, capacity), remainingToAllocate);
-          remainingToAllocate -= allocateHere;
+          allocateHere = Math.max(0, capacity);
+          // ดึงโควตาถัดไปที่ยังว่าง และไม่มี "หมายเหตุ"
+          const autoCandidates = availableQuotas
+            .filter(q => !currentQuotas.includes(q.id) && !(q.note || '').trim())
+            .sort((a, b) => new Date(a.dateStr) - new Date(b.dateStr));
+            
+          if (autoCandidates.length > 0) {
+             currentQuotas.push(...autoCandidates.map(c => c.id));
+          } else {
+             allocateHere = remainingToAllocate; // ถ้าไม่มีโควตาว่างแล้ว ให้ยัดที่เหลือใส่อันนี้เลย (ยอมติดลบ)
+          }
         }
+      } else {
+        allocateHere = Math.min(Math.max(0, capacity), remainingToAllocate);
       }
-      allocations.push({ date: qDate, capacity, allocated: allocateHere, resultingRemaining: capacity - allocateHere });
+      
+      remainingToAllocate -= allocateHere;
+      
+      allocations.push({ 
+        id: qId, 
+        date: qDate, 
+        capacity, 
+        allocated: allocateHere, 
+        resultingRemaining: capacity - allocateHere,
+        isAutoAssigned: i >= explicitlySelected.length
+      });
+      
+      i++;
     }
+    
+    // หากคำนวณจบทุกโควตาแล้วยังเหลือน้ำหนักอีก ให้ยัดใส่อันสุดท้ายเลย
+    if (remainingToAllocate > 0 && allocations.length > 0) {
+      const lastAlloc = allocations[allocations.length - 1];
+      lastAlloc.allocated += remainingToAllocate;
+      lastAlloc.resultingRemaining -= remainingToAllocate;
+      remainingToAllocate = 0;
+    }
+
+    // กรณีบิล 0 กิโลแต่อยากโชว์รายชื่อที่เลือกไว้
+    if (totalBillWeight <= 0) {
+      return explicitlySelected.map(qIdOrDate => {
+        const refLock = (lockData || []).find(l => l.id === qIdOrDate) || (lockData || []).find(l => (l.date || '').startsWith(qIdOrDate));
+        const qDate = refLock ? refLock.date.split('T')[0] : qIdOrDate;
+        const qId = refLock ? refLock.id : qIdOrDate;
+        const capacity = getQuotaRemaining(qId, qDate, editingId);
+        return { id: qId, date: qDate, capacity, allocated: 0, resultingRemaining: capacity, isAutoAssigned: false };
+      });
+    }
+
     return allocations;
   };
 
@@ -535,10 +769,9 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
     if (!formData.customerName && !formData.customerId) return addToast('กรุณาระบุชื่อลูกค้า', 'error');
     if (formData.items.length === 0) return addToast('กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ', 'error');
     if (formData.type === 'BUY' && formData.quotaDates.length === 0) return addToast('กรุณาเลือกโควตาอย่างน้อย 1 วัน', 'error');
-    
     setLoadingMsg('กำลังฉีกน้ำหนักและบันทึกลงระบบ...');
     setIsLoading(true);
-
+    
     const payloadToSave = { ...formData, _editingId: editingId };
     const response = await requestAPI('SAVE_DATA', 'Billing', payloadToSave);
     
@@ -575,9 +808,10 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
               refId: billId, 
               date: formData.date, // <--- ใช้วันที่บิลเป๊ะๆ ไม่ทำลายสถิติสต๊อก
               quotaDate: alloc.date, // <--- ฟิลด์ใหม่ผูกโควตา
+              quotaId: alloc.id, // <--- ฟิลด์รหัสโควตาแบบเจาะจง
               productId: item.productId, name: item.name, category: item.category || '',
               quantity: allowedToTake, unit: item.unit || 'กก.', status: 'Active',
-              note: `รับซื้อ (บิล ${billId}) [หักโควตา ${formatDateTh(alloc.date)}]`
+              note: `รับซื้อ (บิล ${billId})`
             };
             await requestAPI('SAVE_DATA', 'Stock', newStockPayload);
             
@@ -602,10 +836,12 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
       }
 
       addToast(editingId ? 'อัปเดตบิลสำเร็จ' : 'สร้างบิลและหักโควตาอัตโนมัติสำเร็จ', 'success');
-      reloadAllData(); 
+      setIsLoading(false);
       onClose();
+      reloadAllData(); 
+    } else {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const handleAddItem = () => setFormData(prev => ({ ...prev, items: [...prev.items, { rowId: Date.now(), productId: '', name: '', quantity: '', price: '', unit: 'กก.' }] }));
@@ -693,37 +929,45 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
                 <div className="flex items-center justify-between mb-3">
                   <label className="text-[13px] font-bold text-sky-600 flex items-center gap-1.5"><Lock className="w-4 h-4"/> โควตาที่ต้องการใช้ (หักน้ำหนัก) <span className="text-rose-500">*</span></label>
                   {!isViewOnly && (
-                    <button type="button" onClick={handleAddQuotaDate} className="text-[12px] font-bold bg-sky-100 text-sky-600 px-3 py-1.5 rounded-full hover:bg-sky-200 transition-colors flex items-center gap-1">
+                    <button type="button" onClick={handleAddQuotaDate} className={`text-[12px] font-bold px-3 py-1.5 rounded-full transition-colors flex items-center gap-1 ${shakeQuotaBtn ? 'bg-rose-100 text-rose-600 animate-shake' : 'bg-sky-100 text-sky-600 hover:bg-sky-200'}`}>
                       <Plus className="w-3 h-3"/> เพิ่มวันที่โควตา
                     </button>
                   )}
                 </div>
                 
                 <div className="flex flex-col gap-2">
-                  {formData.quotaDates.map((qDate, index) => {
+                  {formData.quotaDates.map((qIdOrDate, index) => {
                     return (
                       <div key={index} className="flex items-center gap-2">
                          <div className="relative flex-1">
                             <select 
                               disabled={isViewOnly} 
-                              value={qDate} 
+                              value={qIdOrDate} 
                               onChange={(e) => {
                                 const newDates = [...formData.quotaDates];
                                 newDates[index] = e.target.value;
                                 setFormData(prev => ({...prev, quotaDates: newDates}));
                               }} 
-                              className="w-full h-[48px] px-4 bg-amber-50 border border-amber-200 rounded-[12px] text-[14px] font-bold text-amber-700 outline-none focus:border-amber-500 transition-all appearance-none cursor-pointer disabled:bg-slate-50 disabled:text-slate-500 disabled:border-slate-200 disabled:cursor-not-allowed"
+                              className="w-full h-[48px] pl-[42px] pr-4 bg-amber-50 border border-amber-200 rounded-[12px] text-[14px] font-bold text-amber-700 outline-none focus:border-amber-500 transition-all appearance-none cursor-pointer disabled:bg-slate-50 disabled:text-slate-500 disabled:border-slate-200 disabled:cursor-not-allowed"
                             >
-                              {availableQuotas.length > 0 ? (
-                                availableQuotas.map((q, idx) => (
-                                  <option key={idx} value={q.dateStr}>
-                                    {formatDateTh(q.dateStr)} (ว่าง {q.remaining.toLocaleString()} {q.unit})
-                                  </option>
-                                ))
-                              ) : <option value={qDate}>{formatDateTh(qDate)} (ไม่มีประวัติโควตา)</option>}
-                              {!availableQuotas.some(q => q.dateStr === qDate) && <option value={qDate}>{formatDateTh(qDate)} (ข้อมูลเก่า)</option>}
+                              { (() => {
+                                const lock = (lockData||[]).find(l => l.id === qIdOrDate);
+                                const dStr = lock ? lock.date.split('T')[0] : qIdOrDate;
+                                return (
+                                  <>
+                                    {availableQuotas.length > 0 ? (
+                                      availableQuotas.map((q, idx) => (
+                                        <option key={idx} value={q.id}>
+                                          {formatDateTh(q.dateStr)} (ว่าง {q.remaining.toLocaleString()} {q.unit}){q.note ? ` - หมายเหตุ: ${q.note}` : ''}
+                                        </option>
+                                      ))
+                                    ) : <option value={qIdOrDate}>{formatDateTh(dStr)} (ไม่มีประวัติโควตา)</option>}
+                                    {!availableQuotas.some(q => q.id === qIdOrDate || q.dateStr === qIdOrDate) && <option value={qIdOrDate}>{formatDateTh(dStr)} (ข้อมูลเก่า)</option>}
+                                  </>
+                                );
+                              })()}
                             </select>
-                            <CalendarClock className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-amber-600/50 pointer-events-none" />
+                            <CalendarClock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-amber-600/50 pointer-events-none" />
                          </div>
                          {!isViewOnly && formData.quotaDates.length > 1 && (
                            <button type="button" onClick={() => {
@@ -762,10 +1006,12 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
               <div className="flex flex-col gap-3">
                  {/* Table Header (แสดงเฉพาะบน Desktop) */}
                  <div className="hidden md:flex items-center px-4 pb-1 text-[13px] font-bold text-slate-500">
-                   <div className="w-[160px]">วันที่อ้างอิงโควตา</div>
-                   <div className="flex-1 flex items-center justify-between text-center pl-6 pr-2">
+                   <div className="w-[160px] shrink-0">วันที่อ้างอิงโควตา</div>
+                   <div className="flex-1 flex items-center justify-between text-center pl-6 md:gap-4">
                       <div className="w-1/3">โควตาเดิม (กก.)</div>
+                      <div className="hidden md:flex items-center justify-center"><div className="w-6 lg:w-12"></div></div>
                       <div className="w-1/3 text-sky-600">หักบิลนี้ (กก.)</div>
+                      <div className="hidden md:flex items-center justify-center"><div className="w-6"></div></div>
                       <div className="w-1/3 text-emerald-600">คงเหลือ (กก.)</div>
                    </div>
                  </div>
@@ -775,9 +1021,14 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
                        
                        {/* Date Badge */}
                        <div className="w-full md:w-[160px] shrink-0">
-                         <div className="bg-slate-50 border border-slate-200 px-4 py-2.5 rounded-xl flex items-center justify-center md:justify-start gap-2.5 w-full md:w-fit">
+                         <div className="bg-slate-50 border border-slate-200 px-4 py-2.5 rounded-xl flex items-center justify-center md:justify-start gap-2.5 w-full md:w-fit relative">
                             <CalendarClock className="w-5 h-5 text-slate-400" />
                             <span className="text-[15px] font-bold text-slate-700">{formatDateTh(alloc.date)}</span>
+                            {alloc.isAutoAssigned && (
+                               <span className="absolute -top-2 -right-2 bg-sky-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm border border-white">
+                                  Auto
+                               </span>
+                            )}
                          </div>
                        </div>
                        
@@ -797,7 +1048,7 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
                           {/* 2. Deduct */}
                           <div className="w-1/3 flex flex-col items-center">
                              <span className="md:hidden text-[12px] font-bold text-sky-500 mb-1">หักบิลนี้</span>
-                             <span className="text-[16px] md:text-[20px] font-mono-code font-bold text-sky-600">-{alloc.allocated.toLocaleString()}</span>
+                             <span className="text-[16px] md:text-[20px] font-mono-code font-bold text-sky-600">{alloc.allocated.toLocaleString()}</span>
                           </div>
                           
                           <div className="hidden md:flex items-center justify-center text-slate-300">
@@ -927,7 +1178,7 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
 // ==========================================
 // 1. DAILY PRICE MODULE (ราคารับซื้อประจำวัน)
 // ==========================================
-function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, dailyPriceData, setDailyPriceData, productData }) {
+function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, dailyPriceData, setDailyPriceData, productData, isGlobalFetching }) {
   const prices = dailyPriceData || []; 
   const [isFetchingTable, setIsFetchingTable] = useState(dailyPriceData === null); 
   const [visibleCount, setVisibleCount] = useState(20); 
@@ -936,24 +1187,12 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
   const [formData, setFormData] = useState({ id: '', date: '', items: [], note: '' });
   const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, id: null });
   const [searchQuery, setSearchQuery] = useState('');
-  const [modalSearch, setModalSearch] = useState('');
-  const [isProductDropdownOpen, setIsProductDropdownOpen] = useState(false);
-  const [productSearch, setProductSearch] = useState('');
   const [isViewOnly, setIsViewOnly] = useState(false); 
   const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
-  const dropdownRef = useRef(null);
   const headerRef = useRef(null);
   const filterRef = useRef(null);
 
   useStickyScroll(headerRef, filterRef);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) setIsProductDropdownOpen(false);
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   const requestSort = (key) => {
     let direction = 'asc';
@@ -982,7 +1221,7 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
     return () => observer.disconnect();
   }, [visibleCount, filteredPrices.length]);
 
-  useEffect(() => { setIsFetchingTable(dailyPriceData === null); }, [dailyPriceData]);
+  useEffect(() => { if (isGlobalFetching) setIsFetchingTable(true); else setIsFetchingTable(dailyPriceData === null); }, [dailyPriceData, isGlobalFetching]);
 
   const loadData = async () => {
     setIsFetchingTable(true);
@@ -1005,10 +1244,24 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
       setFormData({ id: 'AUTO', date: todayStr, items: activeProducts, note: '' });
       setEditingId(null);
     }
-    setProductSearch('');
-    setModalSearch(''); 
     setIsModalOpen(true);
-    setIsProductDropdownOpen(false);
+  };
+
+  const handleAddItem = (product) => {
+    if (!(formData.items || []).find(item => item.id === product.id)) {
+      setFormData(prev => ({
+        ...prev,
+        items: [{ id: product.id, name: product.name, category: product.category, unit: product.unit, todayPrice: product.buyPrice || '' }, ...(prev.items || [])]
+      }));
+    }
+  };
+
+  const handleRemoveItem = (id) => {
+    setFormData(prev => ({ ...prev, items: (prev.items || []).filter(item => item.id !== id) }));
+  };
+
+  const handlePriceChange = (id, newPrice) => {
+    setFormData(prev => ({ ...prev, items: (prev.items || []).map(item => item.id === id ? { ...item, todayPrice: newPrice } : item) }));
   };
 
   const handleSave = async (e) => {
@@ -1034,6 +1287,7 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
   const handleDelete = async () => {
     const idToDelete = confirmDelete.id;
     setConfirmDelete({ isOpen: false, id: null });
+    setLoadingMsg('กำลังลบข้อมูลราคา...');
     setIsLoading(true);
     const response = await requestAPI('DELETE_DATA', 'DailyPrices', { id: idToDelete });
     if (response.status === 'success') {
@@ -1043,13 +1297,7 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
     setIsLoading(false);
   };
 
-  const handlePriceChange = (id, newPrice) => {
-    setFormData(prev => ({ ...prev, items: prev.items.map(item => item.id === id ? { ...item, todayPrice: newPrice } : item) }));
-  };
 
-  const handleRemoveItem = (id) => {
-    setFormData(prev => ({ ...prev, items: prev.items.filter(item => item.id !== id) }));
-  };
 
   const formatDateTh = (dateStr) => {
     if (!dateStr) return '-';
@@ -1081,7 +1329,7 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
               <div className="w-10 h-10 rounded-[12px] bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600"><Tag className="w-5 h-5"/></div>
               ประวัติตั้งราคา (วัน)
             </div>
-            <div className="text-[40px] font-display font-bold text-slate-800 leading-none">{prices.length}</div>
+            {isFetchingTable ? <div className="h-[40px] w-24 bg-slate-100 rounded-[12px] animate-pulse"></div> : <div className="text-[40px] font-display font-bold text-slate-800 leading-none">{prices.length}</div>}
           </div>
         </div>
       </div>
@@ -1175,107 +1423,16 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
                 </div>
               </div>
 
-              <div className="bg-white border border-slate-200/60 rounded-[20px] shadow-sm flex flex-col shrink-0 overflow-hidden">
-                <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row gap-4 shrink-0 bg-white">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                    <input type="text" value={modalSearch} onChange={(e) => setModalSearch(e.target.value)} placeholder="ค้นหารายการ..." className="w-full h-[44px] pl-10 pr-4 bg-slate-50 border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all" />
-                  </div>
-                  <div className="relative w-full md:w-[320px]" ref={dropdownRef}>
-                    <div className="relative">
-                      <PlusCircle className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500" />
-                      <input disabled={isViewOnly} type="text" value={productSearch} onChange={(e) => { setProductSearch(e.target.value); setIsProductDropdownOpen(true); }} onFocus={() => setIsProductDropdownOpen(true)} className="w-full h-[44px] pl-9 pr-4 bg-emerald-50/20 border border-emerald-200 text-emerald-600 rounded-[12px] text-[14px] font-medium outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all disabled:bg-slate-50 disabled:text-slate-400 placeholder:text-emerald-600" placeholder="+ ดึงสินค้าอื่นเข้ารายการวันนี้" />
-                    </div>
-                    {isProductDropdownOpen && !isViewOnly && (
-                      <ul className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                        {(productData || []).filter(p => ((p.name || '').toLowerCase().includes(productSearch.toLowerCase()) || (p.id || '').toLowerCase().includes(productSearch.toLowerCase())) && !(formData.items || []).some(item => item.id === p.id)).length > 0 ? (
-                          (productData || []).filter(p => ((p.name || '').toLowerCase().includes(productSearch.toLowerCase()) || (p.id || '').toLowerCase().includes(productSearch.toLowerCase())) && !(formData.items || []).some(item => item.id === p.id)).map(p => (
-                            <li key={p.id} className="px-3 py-2 hover:bg-sky-50 cursor-pointer text-[13px] text-slate-700 border-b border-slate-50 last:border-0 flex items-center justify-between"
-                              onClick={() => {
-                                const newItem = { id: p.id, name: p.name, category: p.category, unit: p.unit, todayPrice: p.buyPrice || '' };
-                                setFormData(prev => ({ ...prev, items: [newItem, ...(prev.items || [])] }));
-                                setProductSearch(''); setIsProductDropdownOpen(false);
-                              }}>
-                              <div className="flex items-center gap-2"><span className="font-mono-code text-sky-500 font-bold">[{p.id}]</span><span>{p.name}</span></div>
-                              {p.status !== 'Active' && <span className="text-[10px] bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded">Inactive</span>}
-                            </li>
-                          ))
-                        ) : (<li className="px-3 py-3 text-[13px] text-slate-400 text-center">ไม่พบสินค้าอื่นให้เพิ่มแล้ว</li>)}
-                      </ul>
-                    )}
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto bg-white">
-                  <table className="w-full text-left border-collapse whitespace-nowrap min-w-[700px]">
-                    <thead className="bg-slate-50 border-b border-slate-100">
-                      <tr>
-                        <th className="px-6 py-4 font-medium text-slate-500 text-[14px]">รหัสสินค้า</th>
-                        <th className="px-6 py-4 font-medium text-slate-500 text-[14px]">ชื่อสินค้า</th>
-                        <th className="px-6 py-4 font-medium text-slate-500 text-[14px] text-center">หมวดหมู่</th>
-                        <th className="px-6 py-4 font-medium text-slate-500 text-[14px] text-center">ราคาอ้างอิง (DB)</th>
-                        <th className="px-6 py-4 font-bold text-sky-500 text-[15px] bg-sky-50/20 w-[180px] text-center border-l border-r border-sky-100/50">ราคารับซื้อวันนี้ (บาท)</th>
-                        <th className="px-6 py-4 font-medium text-slate-500 text-[14px] text-center w-[80px]">นำออก</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {!(formData.items || []).length ? (
-                        <tr><td colSpan="6" className="text-center p-8 text-slate-400 text-[14px]">ไม่มีรายการสินค้า</td></tr>
-                      ) : (
-                        (formData.items || []).filter(item => {
-                          if (!modalSearch) return true;
-                          const q = modalSearch.toLowerCase();
-                          return (item.id || '').toLowerCase().includes(q) || (item.name || '').toLowerCase().includes(q) || (item.category || '').toLowerCase().includes(q);
-                        }).map((item, index) => {
-                          const refProduct = (productData || []).find(p => p.id === item.id);
-                          return (
-                            <tr key={`${item.id}-${index}`} className="hover:bg-slate-50/50">
-                              <td className="px-6 py-3 font-mono-code text-[14px] font-bold text-slate-400">{item.id}</td>
-                              <td className="px-6 py-3 text-[14px] font-medium text-slate-800">{item.name}</td>
-                              <td className="px-6 py-3 text-center">
-                                <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-slate-100 text-[12px] font-medium text-slate-600">{item.category}</span>
-                              </td>
-                              <td className="px-6 py-3 text-[14px] text-slate-500 font-medium text-center">{refProduct?.buyPrice || '0'}</td>
-                              <td className="px-6 py-2 bg-sky-50/10 border-l border-r border-sky-100/30">
-                                <div className="flex items-center justify-center gap-2">
-                                  <input 
-                                    id={`price-input-${index}`}
-                                    disabled={isViewOnly}
-                                    type="number"
-                                    value={item.todayPrice}
-                                    onChange={(e) => handlePriceChange(item.id, e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
-                                        e.preventDefault();
-                                        const nextInput = document.getElementById(`price-input-${index + 1}`);
-                                        if (nextInput) { nextInput.focus(); nextInput.select(); }
-                                      } else if (e.key === 'Tab' && e.shiftKey) {
-                                        e.preventDefault();
-                                        const prevInput = document.getElementById(`price-input-${index - 1}`);
-                                        if (prevInput) { prevInput.focus(); prevInput.select(); }
-                                      }
-                                    }}
-                                    className="w-[100px] h-[38px] px-3 text-right bg-white border border-sky-200 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 rounded-[8px] font-mono-code text-[14px] font-bold text-sky-700 outline-none disabled:bg-slate-50 disabled:text-slate-400 shadow-sm"
-                                    placeholder="0.00"
-                                  />
-                                  <span className="text-[13px] text-slate-500 w-8">/{item.unit}</span>
-                                </div>
-                              </td>
-                              <td className="px-6 py-3 text-center">
-                                {!isViewOnly && (
-                                  <button tabIndex="-1" onClick={() => handleRemoveItem(item.id)} className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-md transition-colors">
-                                    <X className="w-5 h-5 mx-auto" />
-                                  </button>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              <SharedProductPriceTable
+                items={formData.items}
+                productData={productData}
+                isViewOnly={isViewOnly}
+                priceField="todayPrice"
+                priceColumnLabel="ราคารับซื้อวันนี้ (บาท)"
+                onAddItem={handleAddItem}
+                onRemoveItem={handleRemoveItem}
+                onPriceChange={handlePriceChange}
+              />
             </div>
 
             <div className="px-6 py-4 bg-white border-t border-slate-100 flex justify-end gap-3 shrink-0">
@@ -1293,13 +1450,13 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
 // ==========================================
 // 2. LOCK WEIGHT MODULE (โควตาล็อกน้ำหนัก)
 // ==========================================
-function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, lockData, setLockData, stockData, billingData, openBillModal }) {
+function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, lockData, setLockData, stockData, billingData, openBillModal, productData, reloadAllData, isGlobalFetching }) {
   const locks = lockData || []; 
   const [isFetchingTable, setIsFetchingTable] = useState(lockData === null); 
   const [visibleCount, setVisibleCount] = useState(20); 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [formData, setFormData] = useState({ id: '', date: '', dailyLimitKg: '', dailyLimitUnit: 'Kg.', note: '' });
+  const [formData, setFormData] = useState({ id: '', date: '', dailyLimitKg: '', dailyLimitUnit: 'Kg.', note: '', items: [] });
   const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, id: null });
   const [searchQuery, setSearchQuery] = useState('');
   const [modalSearch, setModalSearch] = useState(''); 
@@ -1341,7 +1498,7 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
     return () => observer.disconnect();
   }, [visibleCount, filteredLocks.length]);
 
-  useEffect(() => { setIsFetchingTable(lockData === null); }, [lockData]);
+  useEffect(() => { if (isGlobalFetching) setIsFetchingTable(true); else setIsFetchingTable(lockData === null); }, [lockData, isGlobalFetching]);
 
   const loadData = async () => {
     setIsFetchingTable(true);
@@ -1355,14 +1512,34 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
     setIsViewOnly(viewOnly);
     setModalSearch('');
     if (lock) {
-      setFormData(lock);
+      setFormData({ ...lock, items: lock.items || [] });
       setEditingId(lock.id);
     } else {
+      const activeProducts = (productData || []).filter(p => p.status === 'Active').map(p => ({
+        id: p.id, name: p.name, category: p.category, unit: p.unit, referencePrice: p.price, factoryPrice: ''
+      }));
       const todayStr = new Date().toISOString().split('T')[0];
-      setFormData({ id: 'AUTO', date: todayStr, dailyLimitKg: '', dailyLimitUnit: 'Kg.', note: '' });
+      setFormData({ id: 'AUTO', date: todayStr, dailyLimitKg: '', dailyLimitUnit: 'Kg.', note: '', items: activeProducts });
       setEditingId(null);
     }
     setIsModalOpen(true);
+  };
+
+  const handlePriceChange = (id, newPrice) => {
+    setFormData(prev => ({ ...prev, items: (prev.items || []).map(item => item.id === id ? { ...item, factoryPrice: newPrice } : item) }));
+  };
+
+  const handleRemoveItem = (id) => {
+    setFormData(prev => ({ ...prev, items: (prev.items || []).filter(item => item.id !== id) }));
+  };
+
+  const handleAddItem = (product) => {
+    if (!(formData.items || []).find(item => item.id === product.id)) {
+      setFormData(prev => ({
+        ...prev,
+        items: [{ id: product.id, name: product.name, category: product.category, unit: product.unit, referencePrice: product.price, factoryPrice: '' }, ...(prev.items || [])]
+      }));
+    }
   };
 
   const handleSave = async (e) => {
@@ -1373,23 +1550,111 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
     const payload = { ...formData, _editingId: editingId };
     const response = await requestAPI('SAVE_DATA', 'DailyLocks', payload);
     if (response.status === 'success') {
-      addToast(editingId ? 'อัปเดตข้อมูลโควตาสำเร็จ' : 'เพิ่มข้อมูลโควตาสำเร็จ', 'success');
-      loadData();
+      const newQuotaId = response.data?.id || formData.id;
+      
+      // --- ระบบดึงยอดติดลบไปโปะโควตาใหม่โดยอัตโนมัติ ---
+      if (!editingId && newQuotaId) {
+         let newCapacity = Number(formData.dailyLimitKg) || 0;
+         const sortedLocks = [...locks].sort((a, b) => new Date(a.date) - new Date(b.date));
+         for (let lock of sortedLocks) {
+           const lockDateStr = lock.date.split('T')[0];
+           const usedStocks = (stockData || []).filter(s => {
+              const matchDate = s.quotaId ? (s.quotaId === lock.id) : (s.quotaDate === lockDateStr || (!s.quotaDate && (s.date || '').startsWith(lockDateStr)));
+              const relatedBill = (billingData || []).find(b => b.id === s.refId);
+              const isBuyBill = relatedBill ? relatedBill.type === 'BUY' : (s.refId || '').startsWith('REC');
+              return matchDate && isBuyBill;
+           });
+           const used = usedStocks.reduce((sum, s) => sum + (Number(s.quantity) || 0), 0);
+           
+           const rem = (Number(lock.dailyLimitKg) || 0) - used;
+           if (rem < 0 && newCapacity > 0) {
+             let remainingTransfer = Math.min(Math.abs(rem), newCapacity);
+             
+             // เรียงลำดับสต๊อกที่ใช้โควตานี้จากใหม่ไปเก่า เพื่อให้ยอดติดลบตกอยู่ที่บิลล่าสุด
+             const sortedUsedStocks = [...usedStocks]
+               .filter(s => s.refId !== 'REC-AUTO-TRANSFER' && s.refId !== 'REC-PENDING-TRANSF' && !(s.id || '').startsWith('TRANSF-'))
+               .sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
+
+             let i = 0;
+             while (remainingTransfer > 0 && i < sortedUsedStocks.length) {
+               const s = sortedUsedStocks[i];
+               const qty = Number(s.quantity) || 0;
+               if (qty <= 0) { i++; continue; }
+               
+               const transferQty = Math.min(qty, remainingTransfer);
+               const ts = Date.now() + i; // ให้ id ไม่ซ้ำกัน
+               
+               // คืนยอดให้โควตาเก่า (ติดลบปริมาณที่ใช้ = ได้โควตาคืน)
+               await requestAPI('SAVE_DATA', 'Stock', {
+                 id: `TRANSF-${ts}-1-${lock.id}`, refId: s.refId, date: formData.date,
+                 quotaDate: lockDateStr, quotaId: lock.id, productId: s.productId, name: s.name, category: s.category || '',
+                 quantity: -transferQty, unit: s.unit || 'Kg.', status: 'Active', note: `โอนยอดที่ติดลบไปโควตา ${formData.date.split('T')[0]}`
+               });
+               
+               // หักยอดจากโควตาใหม่
+               await requestAPI('SAVE_DATA', 'Stock', {
+                 id: `TRANSF-${ts}-2-${newQuotaId}`, refId: s.refId, date: formData.date,
+                 quotaDate: formData.date.split('T')[0], quotaId: newQuotaId, productId: s.productId, name: s.name, category: s.category || '',
+                 quantity: transferQty, unit: s.unit || 'Kg.', status: 'Active', note: `รับยอดติดลบมาจากโควตา ${lockDateStr}`
+               });
+               
+               remainingTransfer -= transferQty;
+               newCapacity -= transferQty;
+               i++;
+             }
+           }
+         }
+      }
+
+      addToast(editingId ? 'อัปเดตข้อมูลโควตาสำเร็จ' : 'เพิ่มข้อมูลโควตาและดึงยอดติดลบสำเร็จ', 'success');
+      setIsLoading(false);
       setIsModalOpen(false);
+      if (reloadAllData) await reloadAllData();
+      else loadData();
+    } else {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const handleDelete = async () => {
     const idToDelete = confirmDelete.id;
     setConfirmDelete({ isOpen: false, id: null });
+    setLoadingMsg('กำลังลบโควตาและเคลียร์ข้อมูลที่เกี่ยวข้อง...');
     setIsLoading(true);
+    
     const response = await requestAPI('DELETE_DATA', 'DailyLocks', { id: idToDelete });
     if (response.status === 'success') {
+      // 1. หาและลบรายการโอนยอดอัตโนมัติ (TRANSF-) ทั้งไปและกลับ
+      const attachedTransfers = (stockData || []).filter(s => s.quotaId === idToDelete && (s.id || '').startsWith('TRANSF-'));
+      let tsSet = new Set();
+      attachedTransfers.forEach(s => {
+        const parts = s.id.split('-');
+        if (parts.length >= 2) tsSet.add(parts[1]); // ดึง timestamp ออกมาเพื่อลบคู่ของมันด้วย
+      });
+
+      const transfersToDelete = (stockData || []).filter(s => {
+        if (!(s.id || '').startsWith('TRANSF-')) return false;
+        const parts = s.id.split('-');
+        return parts.length >= 2 && tsSet.has(parts[1]);
+      });
+
+      for (let s of transfersToDelete) {
+        await requestAPI('DELETE_DATA', 'Stock', { id: s.id });
+      }
+
+      // 2. เคลียร์ quotaId ของสต๊อกปกติที่เคยผูกกับโควตานี้ ให้กลับไปผูกด้วยวันที่แทน
+      const orphanedStocks = (stockData || []).filter(s => s.quotaId === idToDelete && !(s.id || '').startsWith('TRANSF-'));
+      for (let s of orphanedStocks) {
+        await requestAPI('SAVE_DATA', 'Stock', { ...s, quotaId: '' });
+      }
+
       addToast('ลบประวัติโควตาเรียบร้อย', 'success');
-      loadData();
+      setIsLoading(false);
+      if (reloadAllData) await reloadAllData();
+      else loadData();
+    } else {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const formatDateTh = (dateStr) => {
@@ -1403,22 +1668,25 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
   let totalActiveUsed = 0;
 
   locks.forEach(lock => {
+    // โควตาที่มีหมายเหตุ (จองพิเศษ) จะไม่ถูกนำมารวมในภาพรวม
+    if ((lock.note || '').trim()) return;
+
     const lockDateStr = lock.date ? lock.date.split('T')[0] : '';
     const limit = Number(lock.dailyLimitKg) || 0;
     
-    // อัปเกรดตัว Filter ให้อ่านจากฟิลด์ quotaDate (ถ้ามี) ก่อนเสมอ
     const used = (stockData || [])
       .filter(s => {
-         const matchDate = s.quotaDate === lockDateStr || (!s.quotaDate && (s.date || '').startsWith(lockDateStr));
-         return matchDate && (s.refId || '').startsWith('REC');
+         // จับคู่ด้วย quotaId เป็นหลัก ถ้าไม่มีค่อยใช้วันที่
+         const matchDate = s.quotaId ? (s.quotaId === lock.id) : (s.quotaDate === lockDateStr || (!s.quotaDate && (s.date || '').startsWith(lockDateStr)));
+         const relatedBill = (billingData || []).find(b => b.id === s.refId);
+         const isBuyBill = relatedBill ? relatedBill.type === 'BUY' : (s.refId || '').startsWith('REC');
+         return matchDate && isBuyBill;
       })
       .reduce((sum, s) => sum + (Number(s.quantity) || 0), 0);
     
-    const rem = limit - used;
-    if (rem !== 0) {
-      totalActiveLimit += limit;
-      totalActiveUsed += used;
-    }
+    // รวมเฉพาะโควตาทั่วไป (ไม่มีหมายเหตุ)
+    totalActiveLimit += limit;
+    totalActiveUsed += used;
   });
 
   const totalActiveRemaining = totalActiveLimit - totalActiveUsed;
@@ -1426,21 +1694,102 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
 
   const selectedDateStr = formData.date ? formData.date.split('T')[0] : '';
   
-  // ในหน้า Modal ก็ควรอ่านจาก quotaDate เหมือนกัน
-  const modalDailyStocks = (stockData || [])
+  // ในหน้า Modal ก็ควรอ่านจาก quotaId เป็นหลัก
+  let modalDailyStocks = (stockData || [])
     .filter(s => {
-       const matchDate = s.quotaDate === selectedDateStr || (!s.quotaDate && (s.date || '').startsWith(selectedDateStr));
-       return matchDate && (s.refId || '').startsWith('REC');
+       // ถ้าเป็นหน้าเพิ่มข้อมูลใหม่ (AUTO) จะยังไม่มียอด used จนกว่าจะเซฟ
+       if (!editingId) return false;
+       const matchDate = s.quotaId ? (s.quotaId === formData.id) : (s.quotaDate === selectedDateStr || (!s.quotaDate && (s.date || '').startsWith(selectedDateStr)));
+       const relatedBill = (billingData || []).find(b => b.id === s.refId);
+       const isBuyBill = relatedBill ? relatedBill.type === 'BUY' : (s.refId || '').startsWith('REC');
+       return matchDate && isBuyBill;
     });
+
+  // ถ้าเป็นการสร้างโควตาใหม่ ให้คำนวณยอดติดลบสะสมจากโควตาเก่าๆ มาจำลองแสดงเป็นยอดรับซื้อเลย
+  if (!editingId) {
+     let pendingNegativeTotal = 0;
+     const sortedLocks = [...locks].sort((a, b) => new Date(a.date) - new Date(b.date));
+     for (let lock of sortedLocks) {
+       const lockDateStr = lock.date.split('T')[0];
+       const used = (stockData || []).filter(s => {
+          const matchDate = s.quotaId ? (s.quotaId === lock.id) : (s.quotaDate === lockDateStr || (!s.quotaDate && (s.date || '').startsWith(lockDateStr)));
+          const relatedBill = (billingData || []).find(b => b.id === s.refId);
+          const isBuyBill = relatedBill ? relatedBill.type === 'BUY' : (s.refId || '').startsWith('REC');
+          return matchDate && isBuyBill;
+       }).reduce((sum, s) => sum + (Number(s.quantity) || 0), 0);
+       
+       const rem = (Number(lock.dailyLimitKg) || 0) - used;
+       if (rem < 0) {
+         pendingNegativeTotal += Math.abs(rem);
+       }
+     }
+     
+     if (pendingNegativeTotal > 0) {
+       modalDailyStocks.push({
+         id: 'PENDING-TRANSF',
+         refId: 'REC-PENDING-TRANSF',
+         quantity: pendingNegativeTotal,
+         productId: 'SYS-TRANSFER',
+         name: 'ยอดติดลบยกมา (รอโปะโควตานี้)'
+       });
+     }
+  }
 
   const totalModalUsedQuota = modalDailyStocks.reduce((sum, s) => sum + (Number(s.quantity) || 0), 0);
   const modalRemainingQuota = (Number(formData.dailyLimitKg) || 0) - totalModalUsedQuota;
 
-  // สำหรับตารางโชว์บิล ก็ใช้วิธีดึง refId แบบ Unique จาก modalDailyStocks
-  const modalBillIds = [...new Set(modalDailyStocks.map(s => s.refId))];
-  const modalDailyBills = (billingData || [])
-    .filter(b => modalBillIds.includes(b.id))
-    .sort((a, b) => new Date(b.date) - new Date(a.date));
+  let modalDailyBills = [];
+  
+  // ดึงรายการรับซื้อ/แมนนวล ที่เข้าโควตานี้จริงๆ (ไม่รวมระบบโอนยอด)
+  const buyStocks = modalDailyStocks.filter(s => s.productId !== 'SYS-TRANSFER');
+  const groupedBuy = {};
+  
+  buyStocks.forEach(s => {
+    const isBill = s.refId && s.refId.startsWith('REC');
+    const billId = isBill ? s.refId : s.id;
+    if (!groupedBuy[billId]) {
+      const realBill = isBill ? (billingData || []).find(b => b.id === s.refId) : null;
+      groupedBuy[billId] = {
+        id: billId,
+        type: isBill ? 'BUY' : 'ADJUST',
+        customerName: realBill ? realBill.customerName : (s.note || s.name || 'ปรับยอดแมนนวล'),
+        date: realBill ? realBill.date : s.date,
+        items: []
+      };
+    }
+    groupedBuy[billId].items.push({ quantity: Number(s.quantity) || 0, name: s.name });
+  });
+
+  Object.values(groupedBuy).forEach(b => modalDailyBills.push(b));
+
+  // ดึงบิลขายออก (SELL) ตามวันที่โควตา (เพื่อให้เห็นว่ามีของออกไปเท่าไหร่ในวันนั้น)
+  const sellBills = (billingData || []).filter(b => b.type === 'SELL' && (b.date || '').startsWith(selectedDateStr));
+  sellBills.forEach(b => modalDailyBills.push(b));
+
+  // นำเข้ารายการ "โอนโควตา" หรือ "ยกยอด" ให้แสดงในตารางบิลด้านล่างด้วย
+  const sysTransfers = modalDailyStocks.filter(s => s.productId === 'SYS-TRANSFER');
+  const groupedSys = {};
+  sysTransfers.forEach(s => {
+     const key = s.id || s.refId;
+     if (!groupedSys[key]) groupedSys[key] = { refId: s.refId, total: 0, date: s.date || selectedDateStr, title: s.note || s.name || 'ระบบจัดการโควตาอัตโนมัติ' };
+     groupedSys[key].total += Number(s.quantity) || 0;
+  });
+  
+  Object.keys(groupedSys).forEach(key => {
+     modalDailyBills.push({
+       id: groupedSys[key].refId === 'REC-PENDING-TRANSF' ? 'รอคำนวณโควตา' : groupedSys[key].title,
+       type: 'BUY',
+       customerName: 'ระบบจัดการโควตาอัตโนมัติ',
+       date: groupedSys[key].date,
+       items: [{ quantity: groupedSys[key].total }]
+     });
+  });
+
+  modalDailyBills.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  const totalModalSellWeight = modalDailyBills
+    .filter(b => b.type === 'SELL')
+    .reduce((sum, b) => sum + (b.items || []).reduce((itemSum, item) => itemSum + (Number(item.quantity) || 0), 0), 0);
 
   const filteredModalBills = modalDailyBills.filter(b => {
     if(!modalSearch) return true;
@@ -1471,27 +1820,33 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
               <div className="w-10 h-10 rounded-[12px] bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600"><CheckCircle className="w-5 h-5"/></div>
               โควต้าคงเหลือรวมที่รับได้
             </div>
-            <div className="text-[40px] font-display font-bold text-emerald-500 leading-none">
-              {totalActiveRemaining.toLocaleString()} <span className="text-[16px] text-emerald-300 font-medium">{quotaUnit}</span>
-            </div>
+            {isFetchingTable ? <div className="h-[40px] w-32 bg-slate-100 rounded-[12px] animate-pulse mt-1"></div> : (
+              <div className="text-[40px] font-display font-bold text-emerald-500 leading-none">
+                {totalActiveRemaining.toLocaleString()} <span className="text-[16px] text-emerald-300 font-medium">{quotaUnit}</span>
+              </div>
+            )}
           </div>
           <div className="bg-white p-6 rounded-[24px] border border-slate-100/60 shadow-[0_2px_20px_rgba(0,0,0,0.02)] flex flex-col gap-3">
             <div className="flex items-center gap-3 text-[15px] font-medium text-slate-500">
-              <div className="w-10 h-10 rounded-[12px] bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-500"><ArrowDownCircle className="w-5 h-5"/></div>
+              <div className="w-10 h-10 rounded-[12px] bg-sky-50 border border-sky-100 flex items-center justify-center text-sky-600"><ArrowDownCircle className="w-5 h-5"/></div>
               โควต้ารวมที่รับแล้ว
             </div>
-            <div className="text-[40px] font-display font-bold text-amber-500 leading-none">
-              {totalActiveUsed.toLocaleString()} <span className="text-[16px] text-amber-300 font-medium">{quotaUnit}</span>
-            </div>
+            {isFetchingTable ? <div className="h-[40px] w-32 bg-slate-100 rounded-[12px] animate-pulse mt-1"></div> : (
+              <div className="text-[40px] font-display font-bold text-sky-500 leading-none">
+                {totalActiveUsed.toLocaleString()} <span className="text-[16px] text-sky-300 font-medium">{quotaUnit}</span>
+              </div>
+            )}
           </div>
           <div className="bg-white p-6 rounded-[24px] border border-slate-100/60 shadow-[0_2px_20px_rgba(0,0,0,0.02)] flex flex-col gap-3">
             <div className="flex items-center gap-3 text-[15px] font-medium text-slate-500">
               <div className="w-10 h-10 rounded-[12px] bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-600"><Lock className="w-5 h-5"/></div>
               เป้าหมายโควต้ารวมทั้งหมด
             </div>
-            <div className="text-[40px] font-display font-bold text-slate-800 leading-none">
-              {totalActiveLimit.toLocaleString()} <span className="text-[16px] text-slate-400 font-medium">{quotaUnit}</span>
-            </div>
+            {isFetchingTable ? <div className="h-[40px] w-32 bg-slate-100 rounded-[12px] animate-pulse mt-1"></div> : (
+              <div className="text-[40px] font-display font-bold text-slate-800 leading-none">
+                {totalActiveLimit.toLocaleString()} <span className="text-[16px] text-slate-400 font-medium">{quotaUnit}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1510,15 +1865,16 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
       <div className="w-full px-4 md:px-8 flex-1">
         <div className="bg-white rounded-[24px] border border-slate-100/60 shadow-[0_2px_20px_rgba(0,0,0,0.02)] flex flex-col overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse whitespace-nowrap min-w-[800px]">
+            <table className="w-full text-left border-collapse whitespace-nowrap min-w-[1000px]">
               <thead className="bg-slate-50/50 border-b border-slate-100">
                 <tr>
-                  <th onClick={() => requestSort('date')} className="px-6 py-4 font-medium text-slate-500 text-[14px] cursor-pointer hover:bg-slate-200 transition-colors select-none">ประจำวันที่ {sortConfig.key === 'date' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '⇅'}</th>
-                  <th onClick={() => requestSort('id')} className="px-6 py-4 font-medium text-slate-500 text-[14px] cursor-pointer hover:bg-slate-200 transition-colors select-none">รหัสอ้างอิง {sortConfig.key === 'id' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '⇅'}</th>
-                  <th onClick={() => requestSort('dailyLimitKg')} className="px-6 py-4 font-medium text-slate-500 text-[14px] text-right cursor-pointer hover:bg-slate-200 transition-colors select-none">โควตาที่ล็อกไว้ {sortConfig.key === 'dailyLimitKg' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '⇅'}</th>
-                  <th className="px-6 py-4 font-medium text-slate-500 text-[14px] text-right">โควตาที่รับ</th>
-                  <th className="px-6 py-4 font-medium text-slate-500 text-[14px] text-right">โควตาที่เหลือ</th>
-                  <th className="px-6 py-4 font-medium text-slate-500 text-[14px] text-right">จัดการ</th>
+                  <th onClick={() => requestSort('date')} className="px-6 py-4 font-medium text-slate-500 text-[14px] cursor-pointer hover:bg-slate-200 transition-colors select-none w-[160px]">ประจำวันที่ {sortConfig.key === 'date' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '⇅'}</th>
+                  <th onClick={() => requestSort('id')} className="px-6 py-4 font-medium text-slate-500 text-[14px] cursor-pointer hover:bg-slate-200 transition-colors select-none w-[140px]">รหัสอ้างอิง {sortConfig.key === 'id' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '⇅'}</th>
+                  <th onClick={() => requestSort('dailyLimitKg')} className="px-6 py-4 font-medium text-slate-500 text-[14px] text-right cursor-pointer hover:bg-slate-200 transition-colors select-none w-[150px]">โควตาที่ล็อกไว้ {sortConfig.key === 'dailyLimitKg' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '⇅'}</th>
+                  <th className="px-6 py-4 font-medium text-slate-500 text-[14px] text-right w-[150px]">โควตาที่รับ</th>
+                  <th className="px-6 py-4 font-medium text-slate-500 text-[14px] text-right w-[150px]">โควตาที่เหลือ</th>
+                  <th className="px-6 py-4 font-medium text-slate-500 text-[14px] w-auto">หมายเหตุ</th>
+                  <th className="px-6 py-4 font-medium text-slate-500 text-[14px] text-right w-[130px]">จัดการ</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -1530,6 +1886,7 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
                       <td className="px-6 py-5"><div className="h-4 bg-slate-200 rounded w-16 ml-auto"></div></td>
                       <td className="px-6 py-5"><div className="h-4 bg-slate-200 rounded w-16 ml-auto"></div></td>
                       <td className="px-6 py-5"><div className="h-4 bg-slate-200 rounded w-16 ml-auto"></div></td>
+                      <td className="px-6 py-5"><div className="h-4 bg-slate-200 rounded w-32"></div></td>
                       <td className="px-6 py-5 flex justify-end gap-1"><div className="h-8 bg-slate-200 rounded w-24"></div></td>
                     </tr>
                   ))
@@ -1538,10 +1895,7 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
                     const lockDateStr = lock.date ? lock.date.split('T')[0] : '';
                     const totalQuotaRow = Number(lock.dailyLimitKg) || 0;
                     const usedQuotaRow = (stockData || [])
-                      .filter(s => {
-                         const matchDate = s.quotaDate === lockDateStr || (!s.quotaDate && (s.date || '').startsWith(lockDateStr));
-                         return matchDate && (s.refId || '').startsWith('REC');
-                      })
+                      .filter(s => s.quotaId ? (s.quotaId === lock.id) : (s.quotaDate === lockDateStr || (!s.quotaDate && (s.date || '').startsWith(lockDateStr))))
                       .reduce((sum, s) => sum + (Number(s.quantity) || 0), 0);
                     const remainingQuotaRow = totalQuotaRow - usedQuotaRow; // ลบ Math.max เพื่อให้แสดงติดลบได้
 
@@ -1549,14 +1903,15 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
                       <tr key={`${lock.id}-${index}`} onClick={() => openModal(lock, true)} className="hover:bg-slate-50/70 transition-colors cursor-pointer">
                         <td className="px-6 py-4 text-[15px] font-bold text-slate-800">{formatDateTh(lock.date)}</td>
                         <td className="px-6 py-4 font-mono-code text-[14px] text-slate-500">{lock.id}</td>
-                        <td className="px-6 py-4 text-[15px] text-sky-600 font-bold text-right">{totalQuotaRow.toLocaleString()} <span className="text-[12px] font-normal text-slate-500 ml-1">{lock.dailyLimitUnit || 'Kg.'}</span></td>
-                        <td className="px-6 py-4 text-[15px] text-amber-500 font-bold text-right">{usedQuotaRow.toLocaleString()} <span className="text-[12px] font-normal text-slate-500 ml-1">{lock.dailyLimitUnit || 'Kg.'}</span></td>
+                        <td className="px-6 py-4 text-[15px] font-mono-code text-slate-700 font-bold text-right">{totalQuotaRow.toLocaleString()} <span className="text-[12px] font-normal text-slate-500 ml-1">{lock.dailyLimitUnit || 'Kg.'}</span></td>
+                        <td className="px-6 py-4 text-[15px] font-mono-code text-sky-600 font-bold text-right">{usedQuotaRow.toLocaleString()} <span className="text-[12px] font-normal text-slate-500 ml-1">{lock.dailyLimitUnit || 'Kg.'}</span></td>
                         <td className="px-6 py-4 text-[15px] font-bold text-right">
-                          <span className={`${remainingQuotaRow < 0 ? 'text-rose-500 bg-rose-50 px-2 py-1 rounded-md' : 'text-emerald-500'}`}>
+                          <span className={`font-mono-code px-3 py-1 rounded-lg ${remainingQuotaRow < 0 ? 'text-rose-600 bg-rose-50' : 'text-emerald-600 bg-emerald-50'}`}>
                             {remainingQuotaRow.toLocaleString()}
                           </span>
-                          <span className="text-[12px] font-normal text-slate-500 ml-1">{lock.dailyLimitUnit || 'Kg.'}</span>
+                          <span className="text-[12px] font-normal text-slate-500 ml-2">{lock.dailyLimitUnit || 'Kg.'}</span>
                         </td>
+                        <td className="px-6 py-4 text-[14px] text-slate-500 truncate max-w-[200px]">{lock.note || '-'}</td>
                         <td className="px-6 py-4 flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                           <button onClick={() => openModal(lock, true)} className="p-2 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-[12px] transition-colors" title="ดูข้อมูล"><Info className="w-[18px] h-[18px]" /></button>
                           <button onClick={() => openModal(lock, false)} className="p-2 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-[12px] transition-colors" title="แก้ไข"><Edit className="w-[18px] h-[18px]" /></button>
@@ -1567,7 +1922,7 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
                   })
                 )}
                 {!isFetchingTable && filteredLocks.length === 0 && (
-                  <tr><td colSpan="6" className="text-center p-12 text-slate-400 text-[15px]">ไม่พบประวัติโควตาน้ำหนัก</td></tr>
+                  <tr><td colSpan="7" className="text-center p-12 text-slate-400 text-[15px]">ไม่พบประวัติโควตาน้ำหนัก</td></tr>
                 )}
               </tbody>
             </table>
@@ -1609,7 +1964,7 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 shrink-0">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 shrink-0">
                 <div className="bg-[#0ea5e9] p-6 rounded-[24px] shadow-[0_8px_24px_rgba(14,165,233,0.3)] flex flex-col gap-4 text-white md:col-span-2 relative overflow-hidden">
                   <div className="absolute right-0 top-0 opacity-10 transform translate-x-1/4 -translate-y-1/4 pointer-events-none"><Scale className="w-48 h-48" /></div>
                   <div className="flex items-center gap-2 text-[15px] font-medium text-sky-50 z-10"><Lock className="w-4 h-4"/> โควตารับซื้อรวมวันนี้</div>
@@ -1625,24 +1980,32 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
                   </div>
                 </div>
 
-                <div className="bg-white p-6 rounded-[24px] border border-slate-100/60 shadow-sm flex flex-col gap-2 justify-center shrink-0">
+                <div className="bg-white p-6 rounded-[24px] border border-slate-100/60 shadow-sm flex flex-col gap-2 justify-center shrink-0" style={{ containerType: 'inline-size' }}>
                   <div className="flex items-center gap-3 text-[14px] font-medium text-slate-500">
-                    <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-600"><Warehouse className="w-4 h-4"/></div>
+                    <div className="w-8 h-8 rounded-lg bg-sky-50 border border-sky-100 flex items-center justify-center text-sky-600"><Warehouse className="w-4 h-4"/></div>
                     ยอดรับซื้อรวม
                   </div>
-                  <div className="text-[48px] font-display font-bold text-slate-800 leading-none ml-1 truncate" title={totalModalUsedQuota.toLocaleString()}>{totalModalUsedQuota.toLocaleString()}</div>
+                  <div className="font-display font-bold text-sky-500 leading-none ml-1 tracking-tight" style={{ fontSize: 'clamp(24px, 16cqw, 48px)' }} title={totalModalUsedQuota.toLocaleString()}>{totalModalUsedQuota.toLocaleString()}</div>
                 </div>
 
-                <div className="bg-white p-6 rounded-[24px] border border-slate-100/60 shadow-sm flex flex-col gap-2 justify-center shrink-0">
+                <div className="bg-white p-6 rounded-[24px] border border-slate-100/60 shadow-sm flex flex-col gap-2 justify-center shrink-0" style={{ containerType: 'inline-size' }}>
                   <div className="flex items-center gap-3 text-[14px] font-medium text-slate-500">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600"><CheckCircle className="w-4 h-4"/></div>
+                    <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600"><ArrowUpCircle className="w-4 h-4"/></div>
+                    ยอดขายออกรวม
+                  </div>
+                  <div className="font-display font-bold text-emerald-500 leading-none ml-1 tracking-tight" style={{ fontSize: 'clamp(24px, 16cqw, 48px)' }} title={totalModalSellWeight.toLocaleString()}>{totalModalSellWeight.toLocaleString()}</div>
+                </div>
+
+                <div className="bg-white p-6 rounded-[24px] border border-slate-100/60 shadow-sm flex flex-col gap-2 justify-center shrink-0" style={{ containerType: 'inline-size' }}>
+                  <div className="flex items-center gap-3 text-[14px] font-medium text-slate-500">
+                    <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-600"><CheckCircle className="w-4 h-4"/></div>
                     โควตาคงเหลือ
                   </div>
-                  <div className={`text-[48px] font-display font-bold leading-none ml-1 truncate ${modalRemainingQuota < 0 ? 'text-rose-500' : 'text-emerald-500'}`} title={modalRemainingQuota.toLocaleString()}>{modalRemainingQuota.toLocaleString()}</div>
+                  <div className={`font-display font-bold leading-none ml-1 tracking-tight ${modalRemainingQuota < 0 ? 'text-rose-500' : 'text-slate-800'}`} style={{ fontSize: 'clamp(24px, 16cqw, 48px)' }} title={modalRemainingQuota.toLocaleString()}>{modalRemainingQuota.toLocaleString()}</div>
                 </div>
               </div>
 
-              <div className="bg-white border border-slate-200/60 rounded-[20px] shadow-sm flex flex-col shrink-0 overflow-hidden flex-1">
+              <div className="bg-white border border-slate-200/60 rounded-[20px] shadow-sm flex flex-col shrink-0 overflow-hidden">
                 <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row gap-4 shrink-0 bg-white items-center justify-between">
                   <span className="font-bold text-[14px] text-slate-700 ml-2">รายการรับซื้อประจำวัน ({formatDateTh(selectedDateStr)})</span>
                   <div className="relative w-full md:w-1/3">
@@ -1651,14 +2014,14 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
                   </div>
                 </div>
 
-                <div className="overflow-x-auto bg-white flex-1 min-h-[200px]">
+                <div className="overflow-x-auto bg-white min-h-[200px]">
                   <table className="w-full text-left border-collapse whitespace-nowrap min-w-[700px]">
                     <thead className="bg-slate-50 border-b border-slate-100">
                       <tr>
                         <th className="px-6 py-4 font-medium text-slate-500 text-[14px]">เลขที่อ้างอิงบิล</th>
                         <th className="px-6 py-4 font-medium text-slate-500 text-[14px] text-center">ประเภท</th>
                         <th className="px-6 py-4 font-medium text-slate-500 text-[14px]">ลูกค้า/อ้างอิง</th>
-                        <th className="px-6 py-4 font-bold text-sky-500 text-[15px] bg-sky-50/20 w-[180px] text-right border-l border-r border-sky-100/50">ยอดรวมน้ำหนักของบิลนี้</th>
+                        <th className="px-6 py-4 font-bold text-sky-500 text-[15px] bg-sky-50/20 w-[180px] text-right border-l border-r border-sky-100/50">น้ำหนักที่ตัดเข้าโควตา</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -1667,14 +2030,15 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
                       ) : (
                         filteredModalBills.map((bill, index) => {
                           const isBuy = bill.type === 'BUY';
+                          const isSell = bill.type === 'SELL';
                           const totalWeight = (bill.items || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
                           return (
-                            <tr key={`${bill.id}-${index}`} onClick={() => openBillModal && openBillModal(bill, true)} className="hover:bg-slate-50/50 transition-colors cursor-pointer group">
+                            <tr key={`${bill.id}-${index}`} onClick={() => { if(openBillModal) { const realBill = (billingData || []).find(x => x.id === bill.id) || bill; openBillModal(realBill, true); } }} className="hover:bg-slate-50/50 transition-colors cursor-pointer group">
                               <td className="px-6 py-3 font-mono-code text-[14px] font-bold text-sky-500 group-hover:text-sky-600 transition-colors">{bill.id}</td>
                               <td className="px-6 py-3 text-center">
-                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-bold ${isBuy ? 'bg-sky-50 text-sky-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                                  {isBuy ? <ArrowDownCircle className="w-3.5 h-3.5" /> : <ArrowUpCircle className="w-3.5 h-3.5" />}
-                                  {isBuy ? 'รับซื้อ' : 'ขายออก'}
+                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-bold ${isBuy ? 'bg-sky-50 text-sky-600' : isSell ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                                  {isBuy ? <ArrowDownCircle className="w-3.5 h-3.5" /> : isSell ? <ArrowUpCircle className="w-3.5 h-3.5" /> : <Box className="w-3.5 h-3.5" />}
+                                  {isBuy ? 'รับซื้อ' : isSell ? 'ขายออก' : 'แมนนวล'}
                                 </span>
                               </td>
                               <td className="px-6 py-3 text-[14px] font-medium text-slate-800">{bill.customerName || '-'}</td>
@@ -1689,6 +2053,18 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
                   </table>
                 </div>
               </div>
+
+              {/* --- Factory Price Lock Table --- */}
+              <SharedProductPriceTable
+                items={formData.items}
+                productData={productData}
+                isViewOnly={isViewOnly}
+                priceField="factoryPrice"
+                priceColumnLabel="ราคาโรงงาน (บาท)"
+                onAddItem={handleAddItem}
+                onRemoveItem={handleRemoveItem}
+                onPriceChange={handlePriceChange}
+              />
             </div>
 
             <div className="px-6 py-4 bg-white border-t border-slate-100 flex justify-end gap-3 shrink-0">
@@ -1706,7 +2082,7 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
 // ==========================================
 // 3. CUSTOMER MODULE (ระบบลูกค้า)
 // ==========================================
-function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, customerData, setCustomerData }) {
+function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, customerData, setCustomerData, isGlobalFetching }) {
   const customers = customerData || []; 
   const [isFetchingTable, setIsFetchingTable] = useState(customerData === null); 
   const [visibleCount, setVisibleCount] = useState(20); 
@@ -1762,7 +2138,7 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
     return () => observer.disconnect();
   }, [visibleCount, filteredCustomers.length]);
 
-  useEffect(() => { setIsFetchingTable(customerData === null); }, [customerData]);
+  useEffect(() => { if (isGlobalFetching) setIsFetchingTable(true); else setIsFetchingTable(customerData === null); }, [customerData, isGlobalFetching]);
 
   const loadData = async () => {
     setIsFetchingTable(true);
@@ -1799,27 +2175,35 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
   const handleSave = async (e) => {
     e.preventDefault();
     setLoadingMsg('กำลังบันทึกข้อมูล...');
+    setLoadingMsg('กำลังบันทึกข้อมูล...');
     setIsLoading(true);
     const payload = { ...formData, _editingId: editingId };
     const response = await requestAPI('SAVE_DATA', 'Customers', payload);
     if (response.status === 'success') {
       addToast(editingId ? 'อัปเดตข้อมูลสำเร็จ' : 'เพิ่มข้อมูลใหม่สำเร็จ', 'success');
-      loadData();
+      setIsLoading(false);
       setIsModalOpen(false);
+      if (reloadAllData) await reloadAllData();
+      else loadData();
+    } else {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const handleDelete = async () => {
     const idToDelete = confirmDelete.id;
     setConfirmDelete({ isOpen: false, id: null });
+    setLoadingMsg('กำลังลบข้อมูลลูกค้า...');
     setIsLoading(true);
     const response = await requestAPI('DELETE_DATA', 'Customers', { id: idToDelete });
     if (response.status === 'success') {
       addToast('ลบข้อมูลเรียบร้อยแล้ว', 'success');
-      loadData();
+      setIsLoading(false);
+      if (reloadAllData) await reloadAllData();
+      else loadData();
+    } else {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   return (
@@ -1845,21 +2229,21 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
               <div className="w-10 h-10 rounded-[12px] bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-600"><Users className="w-5 h-5"/></div>
               ลูกค้าทั้งหมด
             </div>
-            <div className="text-[40px] font-display font-bold text-slate-800 leading-none">{customers.length}</div>
+            {isFetchingTable ? <div className="h-[40px] w-20 bg-slate-100 rounded-[12px] animate-pulse"></div> : <div className="text-[40px] font-display font-bold text-slate-800 leading-none">{customers.length}</div>}
           </div>
           <div className="bg-white p-6 rounded-[24px] border border-slate-100/60 shadow-[0_2px_20px_rgba(0,0,0,0.02)] flex flex-col gap-3">
             <div className="flex items-center gap-3 text-[15px] font-medium text-slate-500">
               <div className="w-10 h-10 rounded-[12px] bg-sky-50 border border-sky-100 flex items-center justify-center text-sky-500"><UserCircle className="w-5 h-5"/></div>
               ลูกค้าทั่วไป
             </div>
-            <div className="text-[40px] font-display font-bold text-sky-600 leading-none">{customers.filter(c => c.type === 'Regular').length}</div>
+            {isFetchingTable ? <div className="h-[40px] w-20 bg-slate-100 rounded-[12px] animate-pulse"></div> : <div className="text-[40px] font-display font-bold text-sky-600 leading-none">{customers.filter(c => c.type === 'Regular').length}</div>}
           </div>
           <div className="bg-white p-6 rounded-[24px] border border-slate-100/60 shadow-[0_2px_20px_rgba(0,0,0,0.02)] flex flex-col gap-3">
             <div className="flex items-center gap-3 text-[15px] font-medium text-slate-500">
               <div className="w-10 h-10 rounded-[12px] bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-500"><Users className="w-5 h-5"/></div>
               นิติบุคคล / VIP
             </div>
-            <div className="text-[40px] font-display font-bold text-rose-600 leading-none">{customers.filter(c => c.type !== 'Regular').length}</div>
+            {isFetchingTable ? <div className="h-[40px] w-20 bg-slate-100 rounded-[12px] animate-pulse"></div> : <div className="text-[40px] font-display font-bold text-rose-600 leading-none">{customers.filter(c => c.type !== 'Regular').length}</div>}
           </div>
         </div>
       </div>
@@ -2048,7 +2432,7 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
 // ==========================================
 // 4. PRODUCT MODULE (จัดการสินค้า)
 // ==========================================
-function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, productData, setProductData }) {
+function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, productData, setProductData, isGlobalFetching, reloadAllData }) {
   const products = productData || []; 
   const [isFetchingTable, setIsFetchingTable] = useState(productData === null); 
   const [visibleCount, setVisibleCount] = useState(20); 
@@ -2095,7 +2479,7 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
     return () => observer.disconnect();
   }, [visibleCount, filteredProducts.length]);
 
-  useEffect(() => { setIsFetchingTable(productData === null); }, [productData]);
+  useEffect(() => { if (isGlobalFetching) setIsFetchingTable(true); else setIsFetchingTable(productData === null); }, [productData, isGlobalFetching]);
 
   const loadData = async () => {
     setIsFetchingTable(true);
@@ -2124,23 +2508,30 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
     const payload = { ...formData, _editingId: editingId };
     const response = await requestAPI('SAVE_DATA', 'Products', payload);
     if (response.status === 'success') {
-      addToast(editingId ? 'อัปเดตสินค้าสำเร็จ' : 'เพิ่มสินค้าใหม่สำเร็จ', 'success');
-      loadData();
+      addToast(editingId ? 'อัปเดตข้อมูลสำเร็จ' : 'เพิ่มข้อมูลใหม่สำเร็จ', 'success');
+      setIsLoading(false);
       setIsModalOpen(false);
+      if (reloadAllData) await reloadAllData();
+      else loadData();
+    } else {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const handleDelete = async () => {
     const idToDelete = confirmDelete.id;
     setConfirmDelete({ isOpen: false, id: null });
+    setLoadingMsg('กำลังลบข้อมูลสินค้า...');
     setIsLoading(true);
     const response = await requestAPI('DELETE_DATA', 'Products', { id: idToDelete });
     if (response.status === 'success') {
-      addToast('ลบสินค้าเรียบร้อยแล้ว', 'success');
-      loadData();
+      addToast('ลบข้อมูลเรียบร้อยแล้ว', 'success');
+      setIsLoading(false);
+      if (reloadAllData) await reloadAllData();
+      else loadData();
+    } else {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   return (
@@ -2166,21 +2557,21 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
               <div className="w-10 h-10 rounded-[12px] bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-600"><PackagePlus className="w-5 h-5"/></div>
               สินค้าทั้งหมด
             </div>
-            <div className="text-[40px] font-display font-bold text-slate-800 leading-none">{products.length}</div>
+            {isFetchingTable ? <div className="h-[40px] w-20 bg-slate-100 rounded-[12px] animate-pulse"></div> : <div className="text-[40px] font-display font-bold text-slate-800 leading-none">{products.length}</div>}
           </div>
           <div className="bg-white p-6 rounded-[24px] border border-slate-100/60 shadow-[0_2px_20px_rgba(0,0,0,0.02)] flex flex-col gap-3">
             <div className="flex items-center gap-3 text-[15px] font-medium text-slate-500">
               <div className="w-10 h-10 rounded-[12px] bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-500"><Box className="w-5 h-5"/></div>
               หมวดทองแดง
             </div>
-            <div className="text-[40px] font-display font-bold text-amber-600 leading-none">{products.filter(p => p.category === 'ทองแดง').length}</div>
+            {isFetchingTable ? <div className="h-[40px] w-20 bg-slate-100 rounded-[12px] animate-pulse"></div> : <div className="text-[40px] font-display font-bold text-amber-600 leading-none">{products.filter(p => p.category === 'ทองแดง').length}</div>}
           </div>
           <div className="bg-white p-6 rounded-[24px] border border-slate-100/60 shadow-[0_2px_20px_rgba(0,0,0,0.02)] flex flex-col gap-3">
             <div className="flex items-center gap-3 text-[15px] font-medium text-slate-500">
               <div className="w-10 h-10 rounded-[12px] bg-sky-50 border border-sky-100 flex items-center justify-center text-sky-500"><Box className="w-5 h-5"/></div>
               หมวดอลูมิเนียม
             </div>
-            <div className="text-[40px] font-display font-bold text-sky-600 leading-none">{products.filter(p => p.category === 'อลูมิเนียม').length}</div>
+            {isFetchingTable ? <div className="h-[40px] w-20 bg-slate-100 rounded-[12px] animate-pulse"></div> : <div className="text-[40px] font-display font-bold text-sky-600 leading-none">{products.filter(p => p.category === 'อลูมิเนียม').length}</div>}
           </div>
         </div>
       </div>
@@ -2333,7 +2724,7 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
 // ==========================================
 // 5. STOCK MODULE (สต๊อกสินค้า)
 // ==========================================
-function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockData, setStockData, productData }) {
+function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockData, setStockData, productData, isGlobalFetching }) {
   const stocks = stockData || []; 
   const [isFetchingTable, setIsFetchingTable] = useState(stockData === null); 
   const [visibleCount, setVisibleCount] = useState(20); 
@@ -2398,7 +2789,7 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
     return () => observer.disconnect();
   }, [visibleCount, filteredStocks.length]);
 
-  useEffect(() => { setIsFetchingTable(stockData === null); }, [stockData]);
+  useEffect(() => { if (isGlobalFetching) setIsFetchingTable(true); else setIsFetchingTable(stockData === null); }, [stockData, isGlobalFetching]);
 
   const loadData = async () => {
     setIsFetchingTable(true);
@@ -2415,7 +2806,7 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
       setEditingId(stock.id);
       setProductSearch(stock.name || ''); 
     } else {
-      setFormData({ id: '', refId: '', date: new Date().toISOString().split('T')[0], productId: '', name: '', category: '', quantity: '', unit: '', status: 'Active', note: '' });
+      setFormData({ id: '', refId: '', date: new Date().toISOString().split('T')[0], quotaDate: '', productId: '', name: '', category: '', quantity: '', unit: '', status: 'Active', note: '' });
       setEditingId(null);
       setProductSearch('');
     }
@@ -2435,22 +2826,29 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
     const response = await requestAPI('SAVE_DATA', 'Stock', payload);
     if (response.status === 'success') {
       addToast(editingId ? 'ปรับปรุงรายการสต๊อกสำเร็จ' : 'เพิ่มรายการประวัติสต๊อกสำเร็จ', 'success');
-      loadData();
+      setIsLoading(false);
       setIsModalOpen(false);
+      if (reloadAllData) await reloadAllData();
+      else loadData();
+    } else {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const handleDelete = async () => {
     const idToDelete = confirmDelete.id;
     setConfirmDelete({ isOpen: false, id: null });
+    setLoadingMsg('กำลังลบข้อมูลสต๊อก...');
     setIsLoading(true);
     const response = await requestAPI('DELETE_DATA', 'Stock', { id: idToDelete });
     if (response.status === 'success') {
       addToast('ลบรายการประวัติสต๊อกออกแล้ว (ยอดจะเปลี่ยน)', 'success');
-      loadData();
+      setIsLoading(false);
+      if (reloadAllData) await reloadAllData();
+      else loadData();
+    } else {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const activeProducts = (productData || []).filter(p => p.status === 'Active');
@@ -2494,7 +2892,7 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
               <p className="text-slate-500 sticky-header-desc text-[15px]">ตรวจสอบปริมาณคงคลัง และประวัติความเคลื่อนไหว</p>
             </div>
             <button onClick={() => openModal()} className="flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 bg-[#0ea5e9] hover:bg-[#0284c7] text-white px-4 py-2 sm:px-6 sm:py-3 pointer-events-auto">
-              <Plus className="w-5 h-5" /> <span className="hidden sm:inline">ปรับยอดสต๊อก (Manual)</span>
+              <Plus className="w-5 h-5" /> <span className="hidden sm:inline">ปรับยอดสต๊อก</span>
             </button>
           </div>
         </div>
@@ -2502,7 +2900,14 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
 
       <div className="w-full px-4 md:px-8 shrink-0">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4">
-          {summaryCards.length > 0 ? (
+          {isFetchingTable ? (
+            Array(6).fill(0).map((_, i) => (
+              <div key={`skeleton-card-${i}`} className="bg-white px-4 py-4 rounded-[16px] border border-slate-100/80 shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col gap-2">
+                <div className="h-3 w-16 bg-slate-100 rounded-lg animate-pulse"></div>
+                <div className="h-6 w-24 bg-slate-100 rounded-lg animate-pulse mt-1"></div>
+              </div>
+            ))
+          ) : summaryCards.length > 0 ? (
             summaryCards.map(item => (
               <div key={item.id} className="bg-white px-4 py-4 rounded-[16px] border border-slate-100/80 shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col gap-1 transition-transform hover:-translate-y-1">
                 <div className="text-[13px] font-medium text-slate-500 truncate" title={item.name}>{item.name}</div>
@@ -2536,7 +2941,8 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
             <table className="w-full text-left border-collapse whitespace-nowrap min-w-[800px]">
               <thead className="bg-slate-50/50 border-b border-slate-100">
                 <tr>
-                  <th onClick={() => requestSort('date')} className="px-6 py-4 font-medium text-slate-500 text-[14px] cursor-pointer hover:bg-slate-200 transition-colors select-none">วันที่/เวลา {sortConfig.key === 'date' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '⇅'}</th>
+                  <th onClick={() => requestSort('date')} className="px-6 py-4 font-medium text-slate-500 text-[14px] cursor-pointer hover:bg-slate-200 transition-colors select-none">วันที่ทำรายการ {sortConfig.key === 'date' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '⇅'}</th>
+                  <th onClick={() => requestSort('quotaDate')} className="px-6 py-4 font-medium text-slate-500 text-[14px] cursor-pointer hover:bg-slate-200 transition-colors select-none">วันที่โควตา {sortConfig.key === 'quotaDate' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '⇅'}</th>
                   <th onClick={() => requestSort('id')} className="px-6 py-4 font-medium text-slate-500 text-[14px] cursor-pointer hover:bg-slate-200 transition-colors select-none">เลขที่อ้างอิง (บิล) {sortConfig.key === 'id' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '⇅'}</th>
                   <th onClick={() => requestSort('name')} className="px-6 py-4 font-medium text-slate-500 text-[14px] cursor-pointer hover:bg-slate-200 transition-colors select-none">รายการสินค้า {sortConfig.key === 'name' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '⇅'}</th>
                   <th className="px-6 py-4 font-medium text-slate-500 text-[14px]">ประเภท/หมายเหตุ</th>
@@ -2548,6 +2954,7 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
                 {isFetchingTable ? (
                   Array(5).fill(0).map((_, i) => (
                     <tr key={`skeleton-${i}`} className="animate-pulse">
+                      <td className="px-6 py-5"><div className="h-4 bg-slate-200 rounded w-24"></div></td>
                       <td className="px-6 py-5"><div className="h-4 bg-slate-200 rounded w-24"></div></td>
                       <td className="px-6 py-5"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
                       <td className="px-6 py-5"><div className="h-4 bg-slate-200 rounded w-32"></div></td>
@@ -2566,6 +2973,7 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
                     return (
                     <tr key={`${s.id}-${index}`} onClick={() => openModal(s, true)} className="hover:bg-slate-50/70 transition-colors cursor-pointer">
                       <td className="px-6 py-4 text-[14px] text-slate-600">{formatDateTh(s.date)}</td>
+                      <td className="px-6 py-4 text-[14px] font-medium text-emerald-600">{s.quotaDate ? formatDateTh(s.quotaDate) : '-'}</td>
                       <td className="px-6 py-4 font-mono-code text-[15px] font-bold text-sky-500">{s.refId || s.id}</td>
                       <td className="px-6 py-4 text-[15px] text-slate-800 font-medium">{s.name}</td>
                       <td className="px-6 py-4 text-[14px] text-slate-600 truncate max-w-[200px]" title={s.note}>{s.note || '-'}</td>
@@ -2587,7 +2995,7 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
                 })
                 )}
                 {!isFetchingTable && filteredStocks.length === 0 && (
-                  <tr><td colSpan="6" className="text-center p-12 text-slate-400 text-[15px]">ไม่พบประวัติการเคลื่อนไหวสต๊อก</td></tr>
+                  <tr><td colSpan="7" className="text-center p-12 text-slate-400 text-[15px]">ไม่พบประวัติการเคลื่อนไหวสต๊อก</td></tr>
                 )}
               </tbody>
             </table>
@@ -2635,6 +3043,13 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
                     <div className="relative">
                       <input disabled={isViewOnly} type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="w-full h-[44px] pl-4 pr-10 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50 disabled:text-slate-500" />
                       <CalendarClock className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-sky-500 pointer-events-none opacity-80" />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-[13px] font-medium text-slate-600">วันที่โควตา (ถ้ามี)</label>
+                    <div className="relative">
+                      <input disabled={isViewOnly} type="date" value={formData.quotaDate || ''} onChange={(e) => setFormData({...formData, quotaDate: e.target.value})} className="w-full h-[44px] pl-4 pr-10 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50 disabled:text-slate-500" />
+                      <CalendarClock className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-500 pointer-events-none opacity-80" />
                     </div>
                   </div>
                   <div className="space-y-1.5 md:col-span-2">
@@ -2725,7 +3140,7 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
 // ==========================================
 // 6. BILLING MODULE (ออกบิลซื้อ/ขาย)
 // ==========================================
-function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, billingData, setBillingData, customerData, productData, dailyPriceData, stockData, setStockData, openBillModal }) {
+function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, billingData, setBillingData, customerData, productData, dailyPriceData, stockData, setStockData, openBillModal, isGlobalFetching, reloadAllData }) {
   const bills = billingData || []; 
   const [isFetchingTable, setIsFetchingTable] = useState(billingData === null); 
   const [visibleCount, setVisibleCount] = useState(20); 
@@ -2768,7 +3183,7 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
     return () => observer.disconnect();
   }, [visibleCount, filteredBills.length]);
 
-  useEffect(() => { setIsFetchingTable(billingData === null); }, [billingData]);
+  useEffect(() => { if (isGlobalFetching) setIsFetchingTable(true); else setIsFetchingTable(billingData === null); }, [billingData, isGlobalFetching]);
 
   const loadData = async () => {
     setIsFetchingTable(true);
@@ -2781,9 +3196,8 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
   const handleDelete = async () => {
     const idToDelete = confirmDelete.id;
     setConfirmDelete({ isOpen: false, id: null });
-    
-    setIsLoading(true);
     setLoadingMsg('กำลังลบบิลและย้อนกลับยอดสต๊อก...');
+    setIsLoading(true);
     
     const response = await requestAPI('DELETE_DATA', 'Billing', { id: idToDelete });
     if (response.status === 'success') {
@@ -2802,9 +3216,12 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
       }
 
       addToast('ลบบิลและย้อนยอดสต๊อกคืนเรียบร้อยแล้ว', 'success');
-      loadData();
+      setIsLoading(false);
+      if (reloadAllData) await reloadAllData();
+      else loadData();
+    } else {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const formatDateTh = (dateStr) => {
@@ -2843,21 +3260,21 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
               <div className="w-10 h-10 rounded-[12px] bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-600"><FileText className="w-5 h-5"/></div>
               บิลทั้งหมด (รายการ)
             </div>
-            <div className="text-[40px] font-display font-bold text-slate-800 leading-none">{bills.length}</div>
+            {isFetchingTable ? <div className="h-[40px] w-20 bg-slate-100 rounded-[12px] animate-pulse"></div> : <div className="text-[40px] font-display font-bold text-slate-800 leading-none">{bills.length}</div>}
           </div>
           <div className="bg-white p-6 rounded-[24px] border border-slate-100/60 shadow-[0_2px_20px_rgba(0,0,0,0.02)] flex flex-col gap-3">
             <div className="flex items-center gap-3 text-[15px] font-medium text-slate-500">
               <div className="w-10 h-10 rounded-[12px] bg-sky-50 border border-sky-100 flex items-center justify-center text-sky-500"><ArrowDownCircle className="w-5 h-5"/></div>
               บิลรับซื้อ (รายจ่าย)
             </div>
-            <div className="text-[40px] font-display font-bold text-sky-600 leading-none">{bills.filter(b => b.type === 'BUY').length}</div>
+            {isFetchingTable ? <div className="h-[40px] w-20 bg-slate-100 rounded-[12px] animate-pulse"></div> : <div className="text-[40px] font-display font-bold text-sky-600 leading-none">{bills.filter(b => b.type === 'BUY').length}</div>}
           </div>
           <div className="bg-white p-6 rounded-[24px] border border-slate-100/60 shadow-[0_2px_20px_rgba(0,0,0,0.02)] flex flex-col gap-3">
             <div className="flex items-center gap-3 text-[15px] font-medium text-slate-500">
               <div className="w-10 h-10 rounded-[12px] bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-500"><ArrowUpCircle className="w-5 h-5"/></div>
               บิลขายออก (รายรับ)
             </div>
-            <div className="text-[40px] font-display font-bold text-emerald-600 leading-none">{bills.filter(b => b.type === 'SELL').length}</div>
+            {isFetchingTable ? <div className="h-[40px] w-20 bg-slate-100 rounded-[12px] animate-pulse"></div> : <div className="text-[40px] font-display font-bold text-emerald-600 leading-none">{bills.filter(b => b.type === 'SELL').length}</div>}
           </div>
         </div>
       </div>
@@ -2883,6 +3300,7 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
                   <th onClick={() => requestSort('id')} className="px-6 py-4 font-medium text-slate-500 text-[14px] cursor-pointer hover:bg-slate-200 transition-colors select-none">เลขที่บิล {sortConfig.key === 'id' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '⇅'}</th>
                   <th className="px-6 py-4 font-medium text-slate-500 text-[14px]">ประเภท</th>
                   <th onClick={() => requestSort('customerName')} className="px-6 py-4 font-medium text-slate-500 text-[14px] cursor-pointer hover:bg-slate-200 transition-colors select-none">ลูกค้า/อ้างอิง {sortConfig.key === 'customerName' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '⇅'}</th>
+                  <th className="px-6 py-4 font-medium text-slate-500 text-[14px] text-right">น้ำหนักรวม</th>
                   <th onClick={() => requestSort('grandTotal')} className="px-6 py-4 font-medium text-slate-500 text-[14px] text-right cursor-pointer hover:bg-slate-200 transition-colors select-none">ยอดรวม (บาท) {sortConfig.key === 'grandTotal' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '⇅'}</th>
                   <th className="px-6 py-4 font-medium text-slate-500 text-[14px] text-right">จัดการ</th>
                 </tr>
@@ -2895,12 +3313,15 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
                       <td className="px-6 py-5"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
                       <td className="px-6 py-5"><div className="h-4 bg-slate-200 rounded w-16"></div></td>
                       <td className="px-6 py-5"><div className="h-4 bg-slate-200 rounded w-32"></div></td>
+                      <td className="px-6 py-5"><div className="h-4 bg-slate-200 rounded w-16 ml-auto"></div></td>
                       <td className="px-6 py-5"><div className="h-4 bg-slate-200 rounded w-20 ml-auto"></div></td>
                       <td className="px-6 py-5 flex justify-end gap-1"><div className="h-8 bg-slate-200 rounded w-24"></div></td>
                     </tr>
                   ))
                 ) : (
-                  filteredBills.slice(0, visibleCount).map((b, index) => (
+                  filteredBills.slice(0, visibleCount).map((b, index) => {
+                    const totalWeight = (b.items || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+                    return (
                     <tr key={`${b.id}-${index}`} onClick={() => openBillModal && openBillModal(b, true)} className="hover:bg-slate-50/70 transition-colors cursor-pointer">
                       <td className="px-6 py-4 text-[14px] text-slate-600">{formatDateTh(b.date)}</td>
                       <td className="px-6 py-4 font-mono-code text-[15px] font-bold text-sky-500">{b.id}</td>
@@ -2913,6 +3334,9 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
                         </span>
                       </td>
                       <td className="px-6 py-4 text-[15px] text-slate-800 font-medium">{b.customerName}</td>
+                      <td className="px-6 py-4 text-[15px] font-mono-code font-medium text-slate-600 text-right">
+                        {totalWeight > 0 ? `${totalWeight.toLocaleString()} กก.` : '-'}
+                      </td>
                       <td className="px-6 py-4 text-[16px] font-mono-code font-bold text-slate-800 text-right">
                         {Number(b.grandTotal).toLocaleString()}
                       </td>
@@ -2922,10 +3346,11 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
                         <button onClick={() => setConfirmDelete({ isOpen: true, id: b.id })} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-[12px] transition-colors" title="ลบ"><Trash2 className="w-[18px] h-[18px]" /></button>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
                 {!isFetchingTable && filteredBills.length === 0 && (
-                  <tr><td colSpan="6" className="text-center p-12 text-slate-400 text-[15px]">ไม่พบข้อมูลบิล</td></tr>
+                  <tr><td colSpan="7" className="text-center p-12 text-slate-400 text-[15px]">ไม่พบข้อมูลบิล</td></tr>
                 )}
               </tbody>
             </table>
