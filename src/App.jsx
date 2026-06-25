@@ -319,7 +319,29 @@ const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzvTHxvoyfPAz
 // =========================================
 // Generic Mobile Card View Component
 // =========================================
-function MobileCardView({ data, keyField, renderHeader, renderTitle, renderFields, renderActions, onClick, emptyText }) {
+
+function MobileCardView({ data, isLoading, keyField, renderHeader, renderTitle, renderFields, renderActions, onClick, emptyText, isLoadingMore }) {
+  if (isLoading) {
+    return (
+      <div className="md:hidden space-y-4 w-full">
+        {Array(3).fill(0).map((_, i) => (
+          <div key={`skel-${i}`} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3 animate-pulse">
+            <div className="flex justify-between items-center"><div className="h-5 w-1/3 bg-slate-200 rounded-md"></div><div className="h-5 w-1/4 bg-slate-200 rounded-md"></div></div>
+            <div className="h-6 w-2/3 bg-slate-200 rounded-md mb-2"></div>
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col gap-3">
+              <div className="h-4 w-full bg-slate-200 rounded-md"></div>
+              <div className="h-4 w-5/6 bg-slate-200 rounded-md"></div>
+            </div>
+            <div className="mt-2 flex gap-2 pt-3 border-t border-slate-100">
+              <div className="flex-1 h-8 bg-slate-200 rounded-xl"></div>
+              <div className="flex-1 h-8 bg-slate-200 rounded-xl"></div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   if (!data || data.length === 0) {
     return <div className="md:hidden text-center p-8 text-slate-400 bg-white rounded-2xl border border-slate-100 shadow-sm mt-4 text-[14px]">{emptyText || 'ไม่มีข้อมูล'}</div>;
   }
@@ -357,6 +379,25 @@ function MobileCardView({ data, keyField, renderHeader, renderTitle, renderField
               {renderActions(item, index)}
             </div>
           )}
+        </div>
+      ))}
+      {/* Infinity Loading Skeleton (Mobile Card) */}
+      {isLoadingMore && Array.from({ length: 2 }).map((_, i) => (
+        <div key={`skel-mob-more-${i}`} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3">
+            <div className="flex justify-between items-center mb-1.5">
+                <div className="h-5 w-16 bg-slate-200 rounded animate-pulse"></div>
+                <div className="h-5 w-16 bg-slate-200 rounded-md animate-pulse"></div>
+            </div>
+            <div className="mb-3">
+                <div className="h-6 w-40 bg-slate-200 rounded animate-pulse mb-2"></div>
+                <div className="h-6 w-24 bg-slate-200 rounded-lg animate-pulse"></div>
+            </div>
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-full bg-slate-200 animate-pulse shrink-0"></div>
+                    <div className="h-4 w-40 bg-slate-200 rounded animate-pulse"></div>
+                </div>
+            </div>
         </div>
       ))}
     </div>
@@ -812,7 +853,12 @@ export default function App() {
       {/* =========================================
           MAIN CONTENT AREA
           ========================================= */}
-      <main ref={mainRef} className="flex-1 flex flex-col overflow-y-auto relative bg-slate-50 custom-scroll" id="main-scroll-container" style={{ "--header-offset": (isMobile && showMobileBars) ? "56px" : "0px" }}>
+      <main ref={mainRef} className="flex-1 flex flex-col overflow-y-auto relative bg-slate-50 custom-scroll" id="main-scroll-container" style={{ "--header-offset": (isMobile && showMobileBars) ? "56px" : "0px" }} onScroll={(e) => {
+        const { scrollTop, scrollHeight, clientHeight } = e.target;
+        if (scrollHeight - scrollTop - clientHeight < 400) {
+          window.dispatchEvent(new Event('scroll-to-bottom'));
+        }
+      }}>
         
         {/* Spacers for Mobile to prevent content from hiding behind fixed headers/footers */}
         <div className={`md:hidden shrink-0 w-full transition-all duration-300 ${showMobileBars ? 'h-[64px]' : 'h-0'}`}></div>
@@ -1656,7 +1702,9 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
 function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, dailyPriceData, setDailyPriceData, productData, isGlobalFetching }) {
   const prices = dailyPriceData || []; 
   const [isFetchingTable, setIsFetchingTable] = useState(dailyPriceData === null); 
-  const [visibleCount, setVisibleCount] = useState(20); 
+  const [visibleCount, setVisibleCount] = useState(15);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const isLoadingMoreRef = useRef(false); 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({ id: '', date: '', items: [], note: '' });
@@ -1688,13 +1736,21 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
   });
 
   useEffect(() => {
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && filteredPrices.length > visibleCount) setVisibleCount(prev => prev + 20);
-    }, { threshold: 0.1 });
-    const sentinel = document.getElementById('scroll-sentinel-price');
-    if (sentinel) observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [visibleCount, filteredPrices.length]);
+    const handleScrollBottom = () => {
+      if (filteredPrices.length > visibleCount) {
+        if (isLoadingMoreRef.current) return;
+        isLoadingMoreRef.current = true;
+        setIsLoadingMore(true);
+        setTimeout(() => {
+          setVisibleCount(prev => prev + 15);
+          setIsLoadingMore(false);
+          isLoadingMoreRef.current = false;
+        }, 600); // Add a 600ms artificial delay for skeleton
+      }
+    };
+    window.addEventListener('scroll-to-bottom', handleScrollBottom);
+    return () => window.removeEventListener('scroll-to-bottom', handleScrollBottom);
+  }, [visibleCount, filteredPrices.length, isLoadingMore]);
 
   useEffect(() => { if (isGlobalFetching) setIsFetchingTable(true); else setIsFetchingTable(dailyPriceData === null); }, [dailyPriceData, isGlobalFetching]);
 
@@ -1846,7 +1902,8 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
                     </tr>
                   ))
                 ) : (
-                  filteredPrices.slice(0, visibleCount).map((entry, index) => (
+                  <>
+                  {filteredPrices.slice(0, visibleCount).map((entry, index) => (
                     <tr key={`${entry.id}-${index}`} onClick={() => openModal(entry, true)} className="hover:bg-slate-50/70 transition-colors cursor-pointer">
                       <td className="px-6 py-4 text-[15px] font-bold text-slate-800">{formatDateTh(entry.date)}</td>
                       <td className="px-6 py-4 font-mono-code text-[14px] text-slate-500">{entry.id}</td>
@@ -1858,7 +1915,18 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
                       </td>
                     </tr>
                   ))
-                )}
+                }
+                  {/* Infinity Loading Skeleton (Desktop) */}
+                  {isLoadingMore && Array.from({ length: 2 }).map((_, i) => (
+                    <tr key={`skel-med-more-${i}`} className="border-b border-slate-50">
+                      <td className="px-6 py-4"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div></td>
+                      <td className="px-6 py-4"><div className="h-4 w-20 bg-slate-200 rounded animate-pulse"></div></td>
+                      <td className="px-6 py-4"><div className="h-4 w-16 bg-slate-200 rounded animate-pulse mx-auto"></div></td>
+                      <td className="px-6 py-4 pr-6 flex justify-end gap-1"><div className="h-8 w-24 bg-slate-200 rounded-lg animate-pulse"></div></td>
+                    </tr>
+                  ))}
+                </>
+                  )}
                 {!isFetchingTable && filteredPrices.length === 0 && (
                   <tr><td colSpan="4" className="text-center p-12 text-slate-400 text-[15px]">ไม่พบประวัติการตั้งราคา</td></tr>
                 )}
@@ -1866,7 +1934,8 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
             </table>
           </div>
           <MobileCardView 
-            data={!isFetchingTable ? filteredPrices.slice(0, visibleCount) : []}
+            isLoadingMore={isLoadingMore}
+            isLoading={isFetchingTable} data={filteredPrices.slice(0, visibleCount)}
             keyField="id"
             onClick={(entry) => openModal(entry, true)}
             emptyText="ไม่พบประวัติราคารับซื้อ"
@@ -1902,9 +1971,7 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
               </>
             )}
           />
-          {!isFetchingTable && visibleCount < filteredPrices.length && (
-            <div id="scroll-sentinel-price" className="h-16 flex items-center justify-center text-sky-500"><Loader2 className="w-6 h-6 animate-spin" /></div>
-          )}
+          
         </div>
       </div>
 
@@ -1968,7 +2035,9 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
 function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, lockData, setLockData, stockData, billingData, openBillModal, productData, reloadAllData, isGlobalFetching }) {
   const locks = lockData || []; 
   const [isFetchingTable, setIsFetchingTable] = useState(lockData === null); 
-  const [visibleCount, setVisibleCount] = useState(20); 
+  const [visibleCount, setVisibleCount] = useState(15);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const isLoadingMoreRef = useRef(false); 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({ id: '', date: '', dailyLimitKg: '', dailyLimitUnit: 'Kg.', note: '', items: [] });
@@ -2006,13 +2075,21 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
   });
 
   useEffect(() => {
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && filteredLocks.length > visibleCount) setVisibleCount(prev => prev + 20);
-    }, { threshold: 0.1 });
-    const sentinel = document.getElementById('scroll-sentinel-lock');
-    if (sentinel) observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [visibleCount, filteredLocks.length]);
+    const handleScrollBottom = () => {
+      if (filteredLocks.length > visibleCount) {
+        if (isLoadingMoreRef.current) return;
+        isLoadingMoreRef.current = true;
+        setIsLoadingMore(true);
+        setTimeout(() => {
+          setVisibleCount(prev => prev + 15);
+          setIsLoadingMore(false);
+          isLoadingMoreRef.current = false;
+        }, 600); // Add a 600ms artificial delay for skeleton
+      }
+    };
+    window.addEventListener('scroll-to-bottom', handleScrollBottom);
+    return () => window.removeEventListener('scroll-to-bottom', handleScrollBottom);
+  }, [visibleCount, filteredLocks.length, isLoadingMore]);
 
   useEffect(() => { if (isGlobalFetching) setIsFetchingTable(true); else setIsFetchingTable(lockData === null); }, [lockData, isGlobalFetching]);
 
@@ -2515,6 +2592,18 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
                     );
                   })
                 )}
+                {/* Infinity Loading Skeleton (Desktop) */}
+                {isLoadingMore && Array.from({ length: 2 }).map((_, i) => (
+                  <tr key={`skel-med-more-${i}`} className="border-b border-slate-50">
+                    <td className="px-6 py-4"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div></td>
+                    <td className="px-6 py-4"><div className="h-4 w-20 bg-slate-200 rounded animate-pulse"></div></td>
+                    <td className="px-6 py-4"><div className="h-4 w-16 bg-slate-200 rounded animate-pulse ml-auto"></div></td>
+                    <td className="px-6 py-4"><div className="h-4 w-16 bg-slate-200 rounded animate-pulse ml-auto"></div></td>
+                    <td className="px-6 py-4"><div className="h-4 w-16 bg-slate-200 rounded animate-pulse ml-auto"></div></td>
+                    <td className="px-6 py-4"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div></td>
+                    <td className="px-6 py-4 flex justify-end gap-1"><div className="h-8 w-24 bg-slate-200 rounded-lg animate-pulse"></div></td>
+                  </tr>
+                ))}
                 {!isFetchingTable && filteredLocks.length === 0 && (
                   <tr><td colSpan="7" className="text-center p-12 text-slate-400 text-[15px]">ไม่พบประวัติโควตาน้ำหนัก</td></tr>
                 )}
@@ -2522,7 +2611,8 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
             </table>
           </div>
           <MobileCardView 
-            data={!isFetchingTable ? filteredLocks.slice(0, visibleCount) : []}
+            isLoadingMore={isLoadingMore}
+            isLoading={isFetchingTable} data={filteredLocks.slice(0, visibleCount)}
             keyField="id"
             onClick={(lock) => openModal(lock, true)}
             emptyText="ไม่พบประวัติโควตาน้ำหนัก"
@@ -2575,9 +2665,7 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
               </>
             )}
           />
-          {!isFetchingTable && visibleCount < filteredLocks.length && (
-            <div id="scroll-sentinel-lock" className="h-16 flex items-center justify-center text-sky-500"><Loader2 className="w-6 h-6 animate-spin" /></div>
-          )}
+          
         </div>
       </div>
 
@@ -2769,7 +2857,9 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
 function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, customerData, setCustomerData, isGlobalFetching }) {
   const customers = customerData || []; 
   const [isFetchingTable, setIsFetchingTable] = useState(customerData === null); 
-  const [visibleCount, setVisibleCount] = useState(20); 
+  const [visibleCount, setVisibleCount] = useState(15);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const isLoadingMoreRef = useRef(false); 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({ 
@@ -2814,13 +2904,21 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
   });
 
   useEffect(() => {
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && filteredCustomers.length > visibleCount) setVisibleCount(prev => prev + 20);
-    }, { threshold: 0.1 });
-    const sentinel = document.getElementById('scroll-sentinel-customer');
-    if (sentinel) observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [visibleCount, filteredCustomers.length]);
+    const handleScrollBottom = () => {
+      if (filteredCustomers.length > visibleCount) {
+        if (isLoadingMoreRef.current) return;
+        isLoadingMoreRef.current = true;
+        setIsLoadingMore(true);
+        setTimeout(() => {
+          setVisibleCount(prev => prev + 15);
+          setIsLoadingMore(false);
+          isLoadingMoreRef.current = false;
+        }, 600); // Add a 600ms artificial delay for skeleton
+      }
+    };
+    window.addEventListener('scroll-to-bottom', handleScrollBottom);
+    return () => window.removeEventListener('scroll-to-bottom', handleScrollBottom);
+  }, [visibleCount, filteredCustomers.length, isLoadingMore]);
 
   useEffect(() => { if (isGlobalFetching) setIsFetchingTable(true); else setIsFetchingTable(customerData === null); }, [customerData, isGlobalFetching]);
 
@@ -2970,7 +3068,8 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
                     </tr>
                   ))
                 ) : (
-                  filteredCustomers.slice(0, visibleCount).map((c, index) => (
+                  <>
+                  {filteredCustomers.slice(0, visibleCount).map((c, index) => (
                     <tr key={`${c.id}-${index}`} onClick={() => openModal(c, true)} className="hover:bg-slate-50/70 transition-colors cursor-pointer">
                       <td className="px-6 py-4 font-mono-code text-[15px] font-bold text-sky-500">{c.id}</td>
                       <td className="px-6 py-4 text-[15px] text-slate-800 font-medium">{c.name}</td>
@@ -2988,7 +3087,20 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
                       </td>
                     </tr>
                   ))
-                )}
+                }
+                  {/* Infinity Loading Skeleton (Desktop) */}
+                  {isLoadingMore && Array.from({ length: 2 }).map((_, i) => (
+                    <tr key={`skel-med-more-${i}`} className="border-b border-slate-50">
+                      <td className="px-6 py-4"><div className="h-4 w-16 bg-slate-200 rounded animate-pulse"></div></td>
+                      <td className="px-6 py-4"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div></td>
+                      <td className="px-6 py-4"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div></td>
+                      <td className="px-6 py-4"><div className="h-4 w-28 bg-slate-200 rounded animate-pulse"></div></td>
+                      <td className="px-6 py-4"><div className="h-6 w-20 bg-slate-200 rounded-full animate-pulse"></div></td>
+                      <td className="px-6 py-4 flex justify-end gap-1"><div className="h-8 w-24 bg-slate-200 rounded-lg animate-pulse"></div></td>
+                    </tr>
+                  ))}
+                </>
+                  )}
                 {!isFetchingTable && filteredCustomers.length === 0 && (
                   <tr><td colSpan="6" className="text-center p-12 text-slate-400 text-[15px]">ไม่พบข้อมูลลูกค้าในระบบ</td></tr>
                 )}
@@ -2996,7 +3108,8 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
             </table>
           </div>
           <MobileCardView 
-            data={!isFetchingTable ? filteredCustomers.slice(0, visibleCount) : []}
+            isLoadingMore={isLoadingMore}
+            isLoading={isFetchingTable} data={filteredCustomers.slice(0, visibleCount)}
             keyField="id"
             onClick={(c) => openModal(c, true)}
             emptyText="ไม่พบข้อมูลลูกค้าในระบบ"
@@ -3032,9 +3145,7 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
               </>
             )}
           />
-          {!isFetchingTable && visibleCount < filteredCustomers.length && (
-            <div id="scroll-sentinel-customer" className="h-16 flex items-center justify-center text-sky-500"><Loader2 className="w-6 h-6 animate-spin" /></div>
-          )}
+          
         </div>
       </div>
 
@@ -3156,7 +3267,9 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
 function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, productData, setProductData, isGlobalFetching, reloadAllData }) {
   const products = productData || []; 
   const [isFetchingTable, setIsFetchingTable] = useState(productData === null); 
-  const [visibleCount, setVisibleCount] = useState(20); 
+  const [visibleCount, setVisibleCount] = useState(15);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const isLoadingMoreRef = useRef(false); 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({ id: '', name: '', category: 'ทองแดง', unit: 'กก.', buyPrice: '', sellPrice: '', status: 'Active', note: '' });
@@ -3192,13 +3305,21 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
   });
 
   useEffect(() => {
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && filteredProducts.length > visibleCount) setVisibleCount(prev => prev + 20);
-    }, { threshold: 0.1 });
-    const sentinel = document.getElementById('scroll-sentinel-product');
-    if (sentinel) observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [visibleCount, filteredProducts.length]);
+    const handleScrollBottom = () => {
+      if (filteredProducts.length > visibleCount) {
+        if (isLoadingMoreRef.current) return;
+        isLoadingMoreRef.current = true;
+        setIsLoadingMore(true);
+        setTimeout(() => {
+          setVisibleCount(prev => prev + 15);
+          setIsLoadingMore(false);
+          isLoadingMoreRef.current = false;
+        }, 600); // Add a 600ms artificial delay for skeleton
+      }
+    };
+    window.addEventListener('scroll-to-bottom', handleScrollBottom);
+    return () => window.removeEventListener('scroll-to-bottom', handleScrollBottom);
+  }, [visibleCount, filteredProducts.length, isLoadingMore]);
 
   useEffect(() => { if (isGlobalFetching) setIsFetchingTable(true); else setIsFetchingTable(productData === null); }, [productData, isGlobalFetching]);
 
@@ -3335,7 +3456,8 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
                     </tr>
                   ))
                 ) : (
-                  filteredProducts.slice(0, visibleCount).map((p, index) => (
+                  <>
+                  {filteredProducts.slice(0, visibleCount).map((p, index) => (
                     <tr key={`${p.id}-${index}`} onClick={() => openModal(p, true)} className="hover:bg-slate-50/70 transition-colors cursor-pointer">
                       <td className="px-6 py-4 font-mono-code text-[15px] font-bold text-sky-500">{p.id}</td>
                       <td className="px-6 py-4 text-[15px] text-slate-800 font-medium">{p.name}</td>
@@ -3357,7 +3479,20 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
                       </td>
                     </tr>
                   ))
-                )}
+                }
+                  {/* Infinity Loading Skeleton (Desktop) */}
+                  {isLoadingMore && Array.from({ length: 2 }).map((_, i) => (
+                    <tr key={`skel-med-more-${i}`} className="border-b border-slate-50">
+                      <td className="px-6 py-4"><div className="h-4 w-16 bg-slate-200 rounded animate-pulse"></div></td>
+                      <td className="px-6 py-4"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div></td>
+                      <td className="px-6 py-4"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div></td>
+                      <td className="px-6 py-4"><div className="h-4 w-20 bg-slate-200 rounded animate-pulse ml-auto"></div></td>
+                      <td className="px-6 py-4"><div className="h-6 w-20 bg-slate-200 rounded-full animate-pulse"></div></td>
+                      <td className="px-6 py-4 flex justify-end gap-1"><div className="h-8 w-24 bg-slate-200 rounded-lg animate-pulse"></div></td>
+                    </tr>
+                  ))}
+                </>
+                  )}
                 {!isFetchingTable && filteredProducts.length === 0 && (
                   <tr><td colSpan="6" className="text-center p-12 text-slate-400 text-[15px]">ไม่พบข้อมูลสินค้าในระบบ</td></tr>
                 )}
@@ -3365,7 +3500,8 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
             </table>
           </div>
           <MobileCardView 
-            data={!isFetchingTable ? filteredProducts.slice(0, visibleCount) : []}
+            isLoadingMore={isLoadingMore}
+            isLoading={isFetchingTable} data={filteredProducts.slice(0, visibleCount)}
             keyField="id"
             onClick={(p) => openModal(p, true)}
             emptyText="ไม่พบรายการสินค้า"
@@ -3396,9 +3532,7 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
               </>
             )}
           />
-          {!isFetchingTable && visibleCount < filteredProducts.length && (
-            <div id="scroll-sentinel-product" className="h-16 flex items-center justify-center text-sky-500"><Loader2 className="w-6 h-6 animate-spin" /></div>
-          )}
+          
         </div>
       </div>
 
@@ -3480,7 +3614,9 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
 function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockData, setStockData, productData, billingData, lockData, isGlobalFetching }) {
   const stocks = stockData || []; 
   const [isFetchingTable, setIsFetchingTable] = useState(stockData === null); 
-  const [visibleCount, setVisibleCount] = useState(20); 
+  const [visibleCount, setVisibleCount] = useState(15);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const isLoadingMoreRef = useRef(false); 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({ id: '', refId: '', date: '', name: '', category: '', quantity: '', unit: '', status: 'Active', note: '' });
@@ -3534,13 +3670,21 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
   });
 
   useEffect(() => {
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && filteredStocks.length > visibleCount) setVisibleCount(prev => prev + 20);
-    }, { threshold: 0.1 });
-    const sentinel = document.getElementById('scroll-sentinel-stock');
-    if (sentinel) observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [visibleCount, filteredStocks.length]);
+    const handleScrollBottom = () => {
+      if (filteredStocks.length > visibleCount) {
+        if (isLoadingMoreRef.current) return;
+        isLoadingMoreRef.current = true;
+        setIsLoadingMore(true);
+        setTimeout(() => {
+          setVisibleCount(prev => prev + 15);
+          setIsLoadingMore(false);
+          isLoadingMoreRef.current = false;
+        }, 600); // Add a 600ms artificial delay for skeleton
+      }
+    };
+    window.addEventListener('scroll-to-bottom', handleScrollBottom);
+    return () => window.removeEventListener('scroll-to-bottom', handleScrollBottom);
+  }, [visibleCount, filteredStocks.length, isLoadingMore]);
 
   useEffect(() => { if (isGlobalFetching) setIsFetchingTable(true); else setIsFetchingTable(stockData === null); }, [stockData, isGlobalFetching]);
 
@@ -3833,6 +3977,19 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
                   )
                 })
                 )}
+                {/* Infinity Loading Skeleton (Desktop) */}
+                {isLoadingMore && Array.from({ length: 2 }).map((_, i) => (
+                  <tr key={`skel-med-more-${i}`} className="border-b border-slate-50">
+                    <td className="px-6 py-4"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div></td>
+                    <td className="px-6 py-4"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div></td>
+                    <td className="px-6 py-4"><div className="h-4 w-20 bg-slate-200 rounded animate-pulse"></div></td>
+                    <td className="px-6 py-4"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div></td>
+                    <td className="px-6 py-4"><div className="h-6 w-24 bg-slate-200 rounded-full animate-pulse"></div></td>
+                    <td className="px-6 py-4"><div className="h-4 w-28 bg-slate-200 rounded animate-pulse"></div></td>
+                    <td className="px-6 py-4"><div className="h-6 w-20 bg-slate-200 rounded-full animate-pulse ml-auto"></div></td>
+                    <td className="px-6 py-4 flex justify-end gap-1"><div className="h-8 w-24 bg-slate-200 rounded-lg animate-pulse"></div></td>
+                  </tr>
+                ))}
                 {!isFetchingTable && filteredStocks.length === 0 && (
                   <tr><td colSpan="8" className="text-center p-12 text-slate-400 text-[15px]">ไม่พบประวัติการเคลื่อนไหวสต๊อก</td></tr>
                 )}
@@ -3840,7 +3997,8 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
             </table>
           </div>
           <MobileCardView 
-            data={!isFetchingTable ? filteredStocks.slice(0, visibleCount) : []}
+            isLoadingMore={isLoadingMore}
+            isLoading={isFetchingTable} data={filteredStocks.slice(0, visibleCount)}
             keyField="id"
             onClick={(s) => openModal(s, true)}
             emptyText="ไม่พบประวัติสต๊อกสินค้า"
@@ -3895,9 +4053,7 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
               </>
             )}
           />
-          {!isFetchingTable && visibleCount < filteredStocks.length && (
-            <div id="scroll-sentinel-stock" className="h-16 flex items-center justify-center text-sky-500"><Loader2 className="w-6 h-6 animate-spin" /></div>
-          )}
+          
         </div>
       </div>
 
@@ -4040,7 +4196,9 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
 function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, billingData, setBillingData, customerData, productData, dailyPriceData, stockData, setStockData, lockData, openBillModal, isGlobalFetching, reloadAllData }) {
   const bills = billingData || []; 
   const [isFetchingTable, setIsFetchingTable] = useState(billingData === null); 
-  const [visibleCount, setVisibleCount] = useState(20); 
+  const [visibleCount, setVisibleCount] = useState(15);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const isLoadingMoreRef = useRef(false); 
   const [searchQuery, setSearchQuery] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
   const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, id: null, data: [] });
@@ -4072,13 +4230,21 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
   });
 
   useEffect(() => {
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && filteredBills.length > visibleCount) setVisibleCount(prev => prev + 20);
-    }, { threshold: 0.1 });
-    const sentinel = document.getElementById('scroll-sentinel-billing');
-    if (sentinel) observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [visibleCount, filteredBills.length]);
+    const handleScrollBottom = () => {
+      if (filteredBills.length > visibleCount) {
+        if (isLoadingMoreRef.current) return;
+        isLoadingMoreRef.current = true;
+        setIsLoadingMore(true);
+        setTimeout(() => {
+          setVisibleCount(prev => prev + 15);
+          setIsLoadingMore(false);
+          isLoadingMoreRef.current = false;
+        }, 600); // Add a 600ms artificial delay for skeleton
+      }
+    };
+    window.addEventListener('scroll-to-bottom', handleScrollBottom);
+    return () => window.removeEventListener('scroll-to-bottom', handleScrollBottom);
+  }, [visibleCount, filteredBills.length, isLoadingMore]);
 
   useEffect(() => { if (isGlobalFetching) setIsFetchingTable(true); else setIsFetchingTable(billingData === null); }, [billingData, isGlobalFetching]);
 
@@ -4295,6 +4461,18 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
                     );
                   })
                 )}
+                {/* Infinity Loading Skeleton (Desktop) */}
+                {isLoadingMore && Array.from({ length: 2 }).map((_, i) => (
+                  <tr key={`skel-med-more-${i}`} className="border-b border-slate-50">
+                    <td className="px-6 py-4"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div></td>
+                    <td className="px-6 py-4"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div></td>
+                    <td className="px-6 py-4"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div></td>
+                    <td className="px-6 py-4"><div className="h-6 w-24 bg-slate-200 rounded-full animate-pulse"></div></td>
+                    <td className="px-6 py-4"><div className="h-4 w-28 bg-slate-200 rounded animate-pulse mx-auto"></div></td>
+                    <td className="px-6 py-4"><div className="h-6 w-24 bg-slate-200 rounded-full animate-pulse mx-auto"></div></td>
+                    <td className="px-6 py-4 flex justify-end gap-1"><div className="h-8 w-24 bg-slate-200 rounded-lg animate-pulse"></div></td>
+                  </tr>
+                ))}
                 {!isFetchingTable && filteredBills.length === 0 && (
                   <tr><td colSpan="7" className="text-center p-12 text-slate-400 text-[15px]">ไม่พบข้อมูลบิล</td></tr>
                 )}
@@ -4302,9 +4480,10 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
             </table>
           </div>
           <MobileCardView 
-            data={!isFetchingTable ? filteredBills.slice(0, visibleCount) : []}
+            isLoadingMore={isLoadingMore}
+            isLoading={isFetchingTable} data={filteredBills.slice(0, visibleCount)}
             keyField="id"
-            onClick={(b) => openModal(b, true)}
+            onClick={(b) => openBillModal && openBillModal(b, true)}
             emptyText="ไม่พบประวัติบิล"
             renderHeader={(b) => (
               <>
@@ -4334,14 +4513,12 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
             renderActions={(b) => (
               <>
                 <button className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-xl transition-colors font-medium text-xs"><Printer className="w-4 h-4" /> พิมพ์</button>
-                <button onClick={() => openModal(b, true)} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs"><Info className="w-4 h-4" /> ดูบิล</button>
+                <button onClick={() => openBillModal && openBillModal(b, true)} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs"><Info className="w-4 h-4" /> ดูบิล</button>
                 <button onClick={() => setConfirmDelete({ isOpen: true, id: b.id })} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-xs"><Trash2 className="w-4 h-4" /> ลบ</button>
               </>
             )}
           />
-          {!isFetchingTable && visibleCount < filteredBills.length && (
-            <div id="scroll-sentinel-billing" className="h-16 flex items-center justify-center text-sky-500"><Loader2 className="w-6 h-6 animate-spin" /></div>
-          )}
+          
         </div>
       </div>
       <ConfirmAlert isOpen={confirmDelete.isOpen} onCancel={() => setConfirmDelete({ isOpen: false, id: null, data: [] })} onConfirm={handleDelete} title="ยืนยันลบ" text="ต้องการลบบิลและคืนค่ายอดสต๊อกใช่ไหม">
