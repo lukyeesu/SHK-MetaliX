@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { 
   Users, Lock, PackagePlus, Box, FileText, UserCircle, 
   BarChart3, Settings, Plus, Edit, Trash2, X, Loader2, 
   CheckCircle, AlertCircle, Info, Menu, UploadCloud, Search, Printer,
   MapPin, Scan, Clock, Tag, CircleDollarSign, Warehouse, AlertTriangle,
   Scale, Save, PlusCircle, CalendarClock, Minus, 
-  ArrowDownCircle, ArrowUpCircle, FileDown, DollarSign
+  ArrowDownCircle, ArrowUpCircle, FileDown, DollarSign,
+  LayoutDashboard, LogOut, ChevronLeft, ChevronRight, User, Home, Bell
 } from 'lucide-react';
 
 // --- Shared Components ---
@@ -322,7 +323,160 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('shk_active_menu', activeMenu);
   }, [activeMenu]);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  // --- 2. State สำหรับ Responsive & Layout ---
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) return false;
+    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('app_sidebarExpanded') : null;
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+  
+  // --- 3. State สำหรับ Mobile UI ---
+  const [showMobileBars, setShowMobileBars] = useState(true); 
+  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+
+  // --- 4. Refs สำหรับระบบ Dragging (PC Sidebar) และ Scroll ---
+  const [isDraggingSidebar, setIsDraggingSidebar] = useState(false);
+  const sidebarRef = useRef(null);
+  const dragStartX = useRef(null);
+  const hasDragged = useRef(false);
+  const mainRef = useRef(null);
+  const lastScrollY = useRef(0);
+  const scrollPositions = useRef({});
+
+  const SIDEBAR_MIN_WIDTH = isMobile ? 0 : 84;
+  const SIDEBAR_MAX_WIDTH = 256;
+  const sidebarBaseWidth = isSidebarExpanded ? SIDEBAR_MAX_WIDTH : SIDEBAR_MIN_WIDTH;
+  const baseProgress = isSidebarExpanded ? 1 : 0;
+
+  // --- Effect 1: ตรวจจับขนาดหน้าจอ (Resize) แบบ Sync ป้องกัน Layout กระพริบ ---
+  useLayoutEffect(() => {
+    const checkMobile = () => {
+      const isNowMobile = window.innerWidth < 768;
+      if (isMobile !== isNowMobile) {
+        setIsMobile(isNowMobile);
+        if (isNowMobile) setIsSidebarExpanded(false);
+      }
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, [isMobile]);
+
+  useEffect(() => {
+    if (typeof localStorage !== 'undefined' && !isMobile) {
+      localStorage.setItem('app_sidebarExpanded', JSON.stringify(isSidebarExpanded));
+    }
+  }, [isSidebarExpanded, isMobile]);
+
+  // --- Effect 2: ระบบ Custom Drag Engine (60FPS โดยไม่ทำให้ React Re-render) ---
+  useEffect(() => {
+    if (isMobile) return;
+
+    if (!isDraggingSidebar) {
+      if (sidebarRef.current) {
+        sidebarRef.current.style.setProperty('--sidebar-width', `${sidebarBaseWidth}px`);
+        sidebarRef.current.style.setProperty('--drag-progress', baseProgress);
+      }
+    }
+
+    const handleMove = (e) => {
+      if (dragStartX.current === null) return;
+      const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+      const offset = clientX - dragStartX.current;
+      
+      if (Math.abs(offset) > 5 && !hasDragged.current) {
+         hasDragged.current = true;
+         setIsDraggingSidebar(true);
+      }
+
+      if (!hasDragged.current) return;
+
+      let newWidth = Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, sidebarBaseWidth + offset));
+      let progress = (newWidth - SIDEBAR_MIN_WIDTH) / (SIDEBAR_MAX_WIDTH - SIDEBAR_MIN_WIDTH);
+      
+      if (sidebarRef.current) {
+        sidebarRef.current.style.setProperty('--sidebar-width', `${newWidth}px`);
+        sidebarRef.current.style.setProperty('--drag-progress', progress);
+      }
+    };
+
+    const handleEnd = (e) => {
+      if (dragStartX.current === null) return;
+      const clientX = e.type.includes('touch') ? e.changedTouches[0].clientX : e.clientX;
+      const offset = clientX - dragStartX.current;
+      dragStartX.current = null;
+      
+      if (hasDragged.current) {
+         setIsDraggingSidebar(false);
+         setTimeout(() => { hasDragged.current = false; }, 50);
+
+         if (!isSidebarExpanded && offset > 50) setIsSidebarExpanded(true);
+         else if (isSidebarExpanded && offset < -50) setIsSidebarExpanded(false);
+      } else {
+         setTimeout(() => { hasDragged.current = false; }, 50);
+      }
+    };
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleEnd);
+    window.addEventListener('touchmove', handleMove, { passive: true });
+    window.addEventListener('touchend', handleEnd);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleEnd);
+      window.removeEventListener('touchmove', handleMove);
+      window.removeEventListener('touchend', handleEnd);
+    };
+  }, [isDraggingSidebar, isSidebarExpanded, sidebarBaseWidth, baseProgress, isMobile]);
+
+  const startSidebarDrag = (e) => {
+    if (isMobile) return;
+    if (e.target.closest('.no-drag-zone')) return;
+    hasDragged.current = false;
+    dragStartX.current = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+  };
+
+  // --- Effect 3: ซ่อน/แสดง Mobile Bars เวลากวาดนิ้ว (Scroll) ---
+  useEffect(() => {
+    const mainElement = mainRef.current;
+    if (!mainElement) return;
+
+    const handleGlobalScroll = (e) => {
+      if (!isMobile) return; 
+      const currentScrollY = e.target.scrollTop;
+
+      if (currentScrollY <= 20) {
+        setShowMobileBars(true);
+        lastScrollY.current = currentScrollY;
+        return;
+      }
+
+      if (Math.abs(currentScrollY - lastScrollY.current) < 15) return;
+
+      if (currentScrollY > lastScrollY.current) setShowMobileBars(false); 
+      else setShowMobileBars(true); 
+      
+      lastScrollY.current = currentScrollY;
+    };
+
+    mainElement.addEventListener('scroll', handleGlobalScroll, { passive: true });
+    return () => mainElement.removeEventListener('scroll', handleGlobalScroll);
+  }, [isMobile]);
+
+  const handleTabClick = (tabId) => {
+    if (hasDragged.current) return;
+    if (mainRef.current) scrollPositions.current[activeMenu] = mainRef.current.scrollTop;
+    setActiveMenu(tabId);
+    if (isMobile) setIsSidebarExpanded(false); 
+  };
+
+  useLayoutEffect(() => {
+    if (mainRef.current) mainRef.current.scrollTop = scrollPositions.current[activeMenu] || 0;
+  }, [activeMenu]);
+
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState('');
   const [isGlobalFetching, setIsGlobalFetching] = useState(false);
@@ -391,6 +545,10 @@ export default function App() {
     { id: 'settings', label: 'ตั้งค่า', icon: Settings },
   ];
 
+
+  const mobileNavItems = menus.filter(item => ['daily_prices', 'customers', 'billing', 'stock'].includes(item.id));
+  const activeNavIndex = mobileNavItems.findIndex(item => item.id === activeMenu);
+
   const requestAPI = async (action, sheetName, payload = {}) => {
     const useMockAPI = () => {
       return new Promise((resolve) => {
@@ -436,8 +594,272 @@ export default function App() {
     return useMockAPI();
   };
 
+
   return (
-    <div className="flex h-screen bg-slate-50 text-slate-800 overflow-hidden relative">
+    <div className="w-full h-screen bg-slate-50 flex relative overflow-hidden text-slate-800 font-sans">
+      
+      {/* =========================================
+          MOBILE LAYOUT: Backdrop & Off-canvas Menu
+          ========================================= */}
+      <div 
+        className={`md:hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] transition-opacity duration-300 ${isSidebarExpanded ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+        onClick={() => setIsSidebarExpanded(false)}
+      />
+
+      <aside className={`md:hidden fixed inset-y-0 left-0 z-[110] w-[260px] bg-white shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out ${isSidebarExpanded ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-6 flex items-center min-h-[89px] border-b border-slate-100/50 shrink-0">
+          <div className="w-10 h-10 shrink-0 bg-gradient-to-br from-sky-400 to-sky-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-sky-500/30">
+            <LayoutDashboard size={24} />
+          </div>
+          <div className="whitespace-nowrap min-w-[150px] ml-3">
+            <h2 className="font-bold text-slate-800 text-lg leading-tight">SHK<span className="text-sky-500">System</span></h2>
+            <p className="text-xs text-slate-400">Mobile Menu</p>
+          </div>
+        </div>
+
+        <nav className="flex-1 px-3 py-4 flex flex-col overflow-y-auto gap-1">
+          {menus.map((item) => (
+            <button 
+              key={item.id} 
+              onClick={() => handleTabClick(item.id)} 
+              className={`flex items-center py-3 px-3 w-full rounded-2xl transition-all duration-200 ${activeMenu === item.id ? 'bg-sky-500 shadow-md shadow-sky-500/20 text-white font-medium' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}
+            >
+              <div className="shrink-0 w-6 flex items-center justify-center">
+                <item.icon size={20} className={activeMenu === item.id ? 'opacity-100' : 'opacity-70'} />
+              </div>
+              <span className="whitespace-nowrap ml-3 text-left font-medium">{item.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        {/* User Profile (Mobile Menu Bottom) */}
+        <div className="p-4 border-t border-slate-100/50 min-h-[80px] flex items-center gap-3 shrink-0">
+          <div className="w-10 h-10 shrink-0 rounded-full bg-slate-100 flex items-center justify-center text-slate-500"><User size={20} /></div>
+          <div className="text-left flex-1 min-w-0">
+            <div className="font-bold text-slate-700 text-sm truncate">Admin User</div>
+            <p className="text-[11px] font-medium text-emerald-500 truncate">System Manager</p>
+          </div>
+        </div>
+      </aside>
+
+      {/* =========================================
+          DESKTOP LAYOUT: Draggable Sidebar
+          ========================================= */}
+      <aside 
+        ref={sidebarRef}
+        onMouseDown={startSidebarDrag}
+        onTouchStart={startSidebarDrag}
+        style={{ 
+          '--sidebar-width': `${sidebarBaseWidth}px`,
+          '--drag-progress': baseProgress,
+          width: 'var(--sidebar-width)'
+        }}
+        className={`hidden md:flex flex-col h-full relative select-none shrink-0 overflow-hidden ${!isDraggingSidebar ? 'transition-[width] duration-300 ease-in-out' : ''} bg-white/80 backdrop-blur-xl border-r border-slate-200/50 z-[52]`}
+      >
+        {/* === โลโก้ === */}
+        <div className="py-6 px-[22px] flex items-center min-h-[89px] border-b border-slate-100/50 overflow-hidden shrink-0">
+          <div className="w-10 h-10 shrink-0 bg-gradient-to-br from-sky-400 to-sky-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-sky-500/30">
+            <LayoutDashboard size={24} />
+          </div>
+          <div 
+            style={{ 
+              opacity: 'var(--drag-progress)', 
+              transform: `translateX(calc((1 - var(--drag-progress)) * -20px))` 
+            }}
+            className={`whitespace-nowrap min-w-[150px] ml-3 ${!isDraggingSidebar ? 'transition-all duration-300' : ''} ${!isSidebarExpanded && !isDraggingSidebar ? 'pointer-events-none' : ''}`}
+          >
+            <h2 className="font-bold text-slate-800 text-lg leading-tight">SHK<span className="text-sky-500">System</span></h2>
+            <p className="text-xs text-slate-400">Desktop System</p>
+          </div>
+        </div>
+
+        <div className="flex flex-col h-full overflow-hidden">
+          <nav className="flex-1 px-4 py-4 flex flex-col overflow-y-auto overflow-x-hidden relative gap-2 custom-scrollbar">
+            {menus.map((item) => (
+              <button 
+                key={item.id} 
+                onClick={() => handleTabClick(item.id)} 
+                title={!isSidebarExpanded && !isDraggingSidebar ? item.label : undefined}
+                className={`flex items-center py-3 px-3.5 w-full rounded-2xl overflow-hidden ${!isDraggingSidebar ? 'transition-all duration-300' : ''} ${activeMenu === item.id ? 'bg-sky-500 shadow-md shadow-sky-500/20 text-white font-medium' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}
+              >
+                <div className="shrink-0 w-6 flex items-center justify-center">
+                  <item.icon size={20} className={activeMenu === item.id ? 'opacity-100' : 'opacity-70'} />
+                </div>
+                <span 
+                  style={{ 
+                    opacity: 'var(--drag-progress)', 
+                    width: 'calc(var(--drag-progress) * 130px)',
+                    transform: `translateX(calc((1 - var(--drag-progress)) * -15px))`,
+                    marginLeft: 'calc(var(--drag-progress) * 12px)' 
+                  }}
+                  className={`whitespace-nowrap overflow-hidden flex items-center text-left font-medium ${!isDraggingSidebar ? 'transition-all duration-300' : ''}`}
+                >
+                  {item.label}
+                </span>
+              </button>
+            ))}
+          </nav>
+
+          {/* === โปรไฟล์พนักงานด้านล่าง === */}
+          <div className="py-4 px-[22px] border-t border-slate-100/50 min-h-[80px] flex items-center relative shrink-0">
+            <div 
+              className={`absolute left-4 right-4 pl-[6px] pr-4 flex items-center gap-3 cursor-pointer hover:bg-slate-50 py-2.5 rounded-2xl ${!isDraggingSidebar ? 'transition-all duration-300' : ''} ${!isSidebarExpanded && !isDraggingSidebar ? 'pointer-events-none' : ''}`}
+              style={{ opacity: 'var(--drag-progress)' }}
+              onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
+            >
+              <div className="w-10 h-10 shrink-0 rounded-[12px] bg-sky-100 flex items-center justify-center text-sky-600 font-bold shadow-sm">SK</div>
+              <div className="text-left flex-1 min-w-0">
+                <div className="font-bold text-slate-700 text-sm truncate">Admin User</div>
+                <p className="text-[11px] font-medium text-emerald-500 truncate">System Manager</p>
+              </div>
+            </div>
+
+            <div 
+              className={`absolute left-[22px] cursor-pointer hover:scale-105 transition-transform ${!isDraggingSidebar ? 'transition-all duration-300' : ''} ${isSidebarExpanded && !isDraggingSidebar ? 'pointer-events-none' : ''}`}
+              style={{ opacity: 'calc(1 - var(--drag-progress))' }}
+              onClick={() => { setIsSidebarExpanded(true); setIsProfileDropdownOpen(true); }}
+            >
+              <div className="w-10 h-10 rounded-[12px] bg-sky-100 flex items-center justify-center text-sky-600 font-bold shadow-sm ring-2 ring-white">
+                SK
+              </div>
+            </div>
+            
+            {isProfileDropdownOpen && isSidebarExpanded && (
+              <div className="absolute bottom-20 left-4 right-4 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200/50 p-2 z-[999] animate-scale-up text-left space-y-1">
+                <div className="px-3 py-2.5 border-b border-slate-100/50 select-none text-left">
+                  <div className="font-semibold text-slate-700 text-xs kanit-text truncate">Admin User</div>
+                  <p className="text-[11px] font-medium text-emerald-600 kanit-text mt-0.5 truncate">System Manager</p>
+                </div>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setIsProfileDropdownOpen(false); }}
+                  className="w-full text-left px-3 py-2.5 text-xs text-rose-600 hover:bg-rose-50 rounded-xl font-bold kanit-text transition-colors flex items-center gap-2"
+                >
+                  <LogOut size={14} className="opacity-80" />
+                  <span>ออกจากระบบ</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </aside>
+      
+      {/* =========================================
+          MOBILE TOP HEADER: Auto Hide on Scroll
+          ========================================= */}
+      <header className={`md:hidden fixed top-0 left-0 right-0 flex items-center justify-between px-4 py-3 bg-white/90 backdrop-blur-xl border-b border-slate-200/60 z-[45] shadow-sm transition-transform duration-300 ease-in-out ${showMobileBars ? 'translate-y-0' : '-translate-y-full'}`}>
+        <button 
+          onClick={() => setIsSidebarExpanded(true)} 
+          className="flex items-center gap-2 active:scale-95 transition-transform outline-none"
+        >
+          <div className="w-8 h-8 bg-gradient-to-br from-sky-400 to-sky-600 rounded-lg flex items-center justify-center text-white font-bold shadow-md shadow-sky-500/30">
+            <LayoutDashboard size={16} />
+          </div>
+          <h2 className="text-lg font-black text-slate-800 tracking-tight ml-1">SHK<span className="text-sky-500">System</span></h2>
+        </button>
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 ring-2 ring-white cursor-pointer"><User size={16} /></div>
+        </div>
+      </header>
+
+      {/* =========================================
+          MAIN CONTENT AREA
+          ========================================= */}
+      <main ref={mainRef} className="flex-1 flex flex-col overflow-y-auto relative bg-slate-50 custom-scroll" id="main-scroll-container">
+        
+        {/* Spacers for Mobile to prevent content from hiding behind fixed headers/footers */}
+        <div className={`md:hidden shrink-0 w-full transition-all duration-300 ${showMobileBars ? 'h-[64px]' : 'h-0'}`}></div>
+
+        <div className="flex-1 w-full flex flex-col h-full">
+          {activeMenu === 'daily_prices' ? (
+            <DailyPriceModule 
+              setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
+              dailyPriceData={dailyPriceData} setDailyPriceData={setDailyPriceData} productData={productData} isGlobalFetching={isGlobalFetching}
+            />
+          ) : activeMenu === 'customers' ? (
+            <CustomerModule 
+              setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
+              customerData={customerData} setCustomerData={setCustomerData} isGlobalFetching={isGlobalFetching}
+            />
+          ) : activeMenu === 'lock' ? (
+            <LockWeightModule 
+              setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
+              lockData={lockData} setLockData={setLockData} stockData={stockData} billingData={billingData} 
+              openBillModal={openBillModal} productData={productData} reloadAllData={loadAllData} isGlobalFetching={isGlobalFetching}
+            />
+          ) : activeMenu === 'products' ? (
+            <ProductModule 
+              setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
+              productData={productData} setProductData={setProductData} isGlobalFetching={isGlobalFetching}
+            />
+          ) : activeMenu === 'stock' ? (
+            <StockModule 
+              setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
+              stockData={stockData} setStockData={setStockData} productData={productData} billingData={billingData} lockData={lockData} isGlobalFetching={isGlobalFetching}
+            />
+          ) : activeMenu === 'billing' ? (
+            <BillingModule 
+              setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
+              billingData={billingData} setBillingData={setBillingData} customerData={customerData} productData={productData} 
+              dailyPriceData={dailyPriceData} stockData={stockData} setStockData={setStockData} lockData={lockData} openBillModal={openBillModal} isGlobalFetching={isGlobalFetching} reloadAllData={loadAllData}
+            />
+          ) : (
+            <div className="p-4 md:p-8 h-full">
+              <div className="bg-white rounded-[24px] border border-slate-100 shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] p-[28px] h-full flex flex-col items-center justify-center min-h-[400px]">
+                  <p className="text-slate-400 font-display text-[20px]">กำลังพัฒนาระบบ...</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="md:hidden shrink-0 w-full h-[80px] pointer-events-none"></div>
+      </main> 
+
+      {/* =========================================
+          MOBILE BOTTOM NAV (LIQUID TAB BAR)
+          ========================================= */}
+      <div className={`md:hidden fixed bottom-0 left-0 w-full bg-white/95 backdrop-blur-xl border border-b-0 border-slate-200/80 rounded-t-[1.5rem] shadow-[0_-8px_30px_rgba(0,0,0,0.06)] pb-[calc(max(0.5rem,env(safe-area-inset-bottom)))] pt-2 px-2 z-[45] transition-transform duration-300 ease-in-out ${showMobileBars ? 'translate-y-0' : 'translate-y-[120%]'}`}>
+        <div className="relative flex w-full max-w-sm mx-auto h-14">
+            
+            <div 
+              className="absolute top-0 bottom-0 flex items-center justify-center pointer-events-none transition-transform duration-500 ease-in-out" 
+              style={{ 
+                width: `calc(100% / ${mobileNavItems.length})`, 
+                transform: `translateX(calc(${activeNavIndex} * 100%))`, 
+                opacity: activeNavIndex !== -1 ? 1 : 0
+              }} 
+            >
+              <div className="w-12 h-12 bg-gradient-to-tr from-sky-400 to-sky-600 rounded-full shadow-lg shadow-sky-500/40" />
+            </div>
+
+            {mobileNavItems.map((item) => {
+                const isActive = activeMenu === item.id;
+                return (
+                    <button 
+                        key={item.id} 
+                        onClick={() => handleTabClick(item.id)} 
+                        className={`relative z-10 flex-1 flex items-center justify-center transition-colors duration-500 ${isActive ? 'text-white' : 'text-slate-400 hover:text-sky-500'}`}
+                    >
+                        <item.icon 
+                            size={24} 
+                            strokeWidth={isActive ? 2.5 : 2} 
+                            className={`transition-transform duration-500 ease-in-out ${isActive ? 'scale-110' : 'scale-100'}`}
+                        />
+                    </button>
+                );
+            })}
+        </div>
+      </div>
+
+      {isLoading && <FullPageLoader message={loadingMsg} />}
+      <Toast toasts={toasts} removeToast={removeToast} />
+
+      <GlobalBillModal 
+        config={billModalConfig} onClose={closeBillModal} 
+        setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI}
+        billingData={billingData} customerData={customerData} productData={productData} dailyPriceData={dailyPriceData}
+        lockData={lockData} stockData={stockData} reloadAllData={loadAllData}
+      />
+
       <style dangerouslySetInnerHTML={{__html: `
         @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Roboto+Mono&display=swap');
         * { font-family: 'Kanit', sans-serif; }
@@ -491,101 +913,32 @@ export default function App() {
         @media (max-width: 768px) { .sticky-filter-inner { width: calc(100% - 2rem); } }
         .is-scrolled.sticky-filter-inner, .is-scrolled .sticky-filter-inner { width: 100%; border-radius: 0 0 1.5rem 1.5rem; border-top-color: transparent; border-left-color: transparent; border-right-color: transparent; border-bottom-color: rgba(226, 232, 240, 0.8); box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05); background-color: rgba(255, 255, 255, 0.95); backdrop-filter: blur(12px); padding-top: 2.5rem; padding-bottom: 1rem; padding-left: 2rem; padding-right: 2rem; }
         @media (max-width: 768px) { .is-scrolled.sticky-filter-inner, .is-scrolled .sticky-filter-inner { padding-top: 2.125rem; padding-bottom: 0.875rem; padding-left: 1rem; padding-right: 1rem; } }
-      `}} />
-
-      <aside className={`hidden md:flex flex-col bg-white/80 backdrop-blur-xl border-r border-slate-200 transition-all duration-300 z-40 ${isSidebarOpen ? 'w-[210px]' : 'w-[88px]'}`}>
-        <div className="h-[72px] px-6 flex items-center justify-between border-b border-slate-100">
-          {isSidebarOpen && <span className="font-display text-[18px] font-bold tracking-[-0.01em] text-sky-500 truncate">SHK System</span>}
-          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-slate-50 rounded-[12px] transition-colors text-slate-400">
-            <Menu className="w-5 h-5" />
-          </button>
-        </div>
+      
+        /* คลาสสำหรับระบบ Drag & Drop 60FPS */
+        body.is-custom-dragging {
+            touch-action: none !important;
+            overflow: hidden !important; 
+        }
+        body.is-custom-dragging * {
+            cursor: w-resize !important;
+            user-select: none !important;
+            -webkit-user-select: none !important;
+        }
         
-        <nav className="flex-1 overflow-y-auto py-6 px-4">
-          <ul className="space-y-2">
-            {menus.map((menu) => (
-              <li key={menu.id}>
-                <button
-                  onClick={() => setActiveMenu(menu.id)}
-                  className={`w-full flex items-center gap-4 px-4 h-[48px] rounded-[16px] transition-colors
-                    ${activeMenu === menu.id ? 'bg-sky-500 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}
-                  `}
-                >
-                  <menu.icon className={`w-5 h-5 flex-shrink-0 ${activeMenu === menu.id ? 'text-white' : 'text-slate-400'}`} />
-                  {isSidebarOpen && <span className="font-medium text-[15px] truncate">{menu.label}</span>}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </nav>
-
-        <div className="p-4 border-t border-slate-100">
-          <div className={`flex items-center gap-3 ${isSidebarOpen ? 'bg-slate-50 p-3 rounded-[16px]' : 'justify-center'}`}>
-            <div className="w-10 h-10 bg-sky-100 text-sky-600 rounded-[12px] flex items-center justify-center font-bold shadow-sm shrink-0">SK</div>
-            {isSidebarOpen && (
-              <div className="overflow-hidden">
-                <p className="font-medium text-[14px] truncate">Admin User</p>
-                <p className="text-[12px] text-slate-500 truncate">System Manager</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </aside>
-
-      <main className="flex-1 flex flex-col h-full overflow-hidden relative bg-slate-50">
-        <div id="main-scroll-container" className="flex-1 overflow-auto relative">
-          {activeMenu === 'daily_prices' ? (
-            <DailyPriceModule 
-              setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
-              dailyPriceData={dailyPriceData} setDailyPriceData={setDailyPriceData} productData={productData} isGlobalFetching={isGlobalFetching}
-            />
-          ) : activeMenu === 'customers' ? (
-            <CustomerModule 
-              setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
-              customerData={customerData} setCustomerData={setCustomerData} isGlobalFetching={isGlobalFetching}
-            />
-          ) : activeMenu === 'lock' ? (
-            <LockWeightModule 
-              setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
-              lockData={lockData} setLockData={setLockData} stockData={stockData} billingData={billingData} 
-              openBillModal={openBillModal} productData={productData} reloadAllData={loadAllData} isGlobalFetching={isGlobalFetching}
-            />
-          ) : activeMenu === 'products' ? (
-            <ProductModule 
-              setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
-              productData={productData} setProductData={setProductData} isGlobalFetching={isGlobalFetching}
-            />
-          ) : activeMenu === 'stock' ? (
-            <StockModule 
-              setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
-              stockData={stockData} setStockData={setStockData} productData={productData} billingData={billingData} lockData={lockData} isGlobalFetching={isGlobalFetching}
-            />
-          ) : activeMenu === 'billing' ? (
-            <BillingModule 
-              setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
-              billingData={billingData} setBillingData={setBillingData} customerData={customerData} productData={productData} 
-              dailyPriceData={dailyPriceData} stockData={stockData} setStockData={setStockData} lockData={lockData} openBillModal={openBillModal} isGlobalFetching={isGlobalFetching} reloadAllData={loadAllData}
-            />
-          ) : (
-            <div className="p-4 md:p-8 h-full">
-              <div className="bg-white rounded-[24px] border border-slate-100 shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] p-[28px] h-full flex flex-col items-center justify-center">
-                  <p className="text-slate-400 font-display text-[20px]">กำลังพัฒนาระบบ...</p>
-              </div>
-            </div>
-          )}
-        </div>
-      </main>
-
-      {isLoading && <FullPageLoader message={loadingMsg} />}
-      <Toast toasts={toasts} removeToast={removeToast} />
-
-      {/* --- Global Bill Modal --- */}
-      <GlobalBillModal 
-        config={billModalConfig} onClose={closeBillModal} 
-        setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI}
-        billingData={billingData} customerData={customerData} productData={productData} dailyPriceData={dailyPriceData}
-        lockData={lockData} stockData={stockData} reloadAllData={loadAllData}
-      />
+        /* ซ่อน Scrollbar แนวนอนและแนวตั้งให้สวยงาม */
+        .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .custom-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        @keyframes scale-up {
+          0% { transform: scale(0.95); opacity: 0; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-scale-up {
+          animation: scale-up 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+`}} />
     </div>
   );
 }
@@ -1364,7 +1717,7 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
   };
 
   return (
-    <div className="flex flex-col font-body pb-10 min-h-full w-full gap-4 md:gap-5">
+    <div className="flex flex-col font-body pb-10 w-full gap-4 md:gap-5">
       <div ref={headerRef} className="sticky top-0 z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col">
         <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
           <div className="w-full mx-auto px-4 md:px-8 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
@@ -1921,7 +2274,7 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
   });
 
   return (
-    <div className="flex flex-col font-body pb-10 min-h-full w-full gap-4 md:gap-5">
+    <div className="flex flex-col font-body pb-10 w-full gap-4 md:gap-5">
       <div ref={headerRef} className="sticky top-0 z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col">
         <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
           <div className="w-full mx-auto px-4 md:px-8 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
@@ -2379,7 +2732,7 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
   };
 
   return (
-    <div className="flex flex-col font-body pb-10 min-h-full w-full gap-4 md:gap-5">
+    <div className="flex flex-col font-body pb-10 w-full gap-4 md:gap-5">
       <div ref={headerRef} className="sticky top-0 z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col">
         <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
           <div className="w-full mx-auto px-4 md:px-8 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
@@ -2707,7 +3060,7 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
   };
 
   return (
-    <div className="flex flex-col font-body pb-10 min-h-full w-full gap-4 md:gap-5">
+    <div className="flex flex-col font-body pb-10 w-full gap-4 md:gap-5">
       <div ref={headerRef} className="sticky top-0 z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col">
         <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
           <div className="w-full mx-auto px-4 md:px-8 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
@@ -3071,7 +3424,7 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
   };
 
   return (
-    <div className="flex flex-col font-body pb-10 min-h-full w-full gap-4 md:gap-5">
+    <div className="flex flex-col font-body pb-10 w-full gap-4 md:gap-5">
       <div ref={headerRef} className="sticky top-0 z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col">
         <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
           <div className="w-full mx-auto px-4 md:px-8 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
@@ -3498,7 +3851,7 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
   };
 
   return (
-    <div className="flex flex-col font-body pb-10 min-h-full w-full gap-4 md:gap-5">
+    <div className="flex flex-col font-body pb-10 w-full gap-4 md:gap-5">
       <div ref={headerRef} className="sticky top-0 z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col">
         <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
           <div className="w-full mx-auto px-4 md:px-8 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
