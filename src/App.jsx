@@ -6,7 +6,7 @@ import {
   MapPin, Scan, Clock, Tag, CircleDollarSign, Warehouse, AlertTriangle,
   Scale, Save, PlusCircle, CalendarClock, Minus, 
   ArrowDownCircle, ArrowUpCircle, FileDown, DollarSign,
-  LayoutDashboard, LogOut, ChevronLeft, ChevronRight, User, Home, Bell
+  LayoutDashboard, LogOut, ChevronLeft, ChevronRight, User, Home, Bell, Phone
 } from 'lucide-react';
 
 // --- Shared Components ---
@@ -21,7 +21,7 @@ const FullPageLoader = ({ message }) => (
 );
 
 const Toast = ({ toasts, removeToast }) => (
-  <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-3 font-body items-center pointer-events-none w-full px-4">
+  <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[200] flex flex-col gap-3 font-body items-center pointer-events-none w-full px-4">
     {toasts.map(toast => (
       <div key={toast.id} className={`pointer-events-auto flex items-center w-max max-w-full gap-3 px-5 py-4 rounded-[16px] shadow-[0_8px_32px_rgba(0,0,0,0.12)] text-white transform transition-all duration-300
         ${toast.type === 'success' ? 'bg-emerald-500' : toast.type === 'error' ? 'bg-rose-500' : 'bg-slate-800'}
@@ -315,6 +315,54 @@ const generateDocId = (prefix, dataArray, dateStr) => {
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzvTHxvoyfPAz2eKZy2es-hYSL9Y5n198mNVx3XOJPntCnmC9yHy3LTUOm6GsS-_m7e/exec";
 
 // --- Main Application ---
+
+// =========================================
+// Generic Mobile Card View Component
+// =========================================
+function MobileCardView({ data, keyField, renderHeader, renderTitle, renderFields, renderActions, onClick, emptyText }) {
+  if (!data || data.length === 0) {
+    return <div className="md:hidden text-center p-8 text-slate-400 bg-white rounded-2xl border border-slate-100 shadow-sm mt-4 text-[14px]">{emptyText || 'ไม่มีข้อมูล'}</div>;
+  }
+  return (
+    <div className="md:hidden space-y-4 w-full">
+      {data.map((item, index) => (
+        <div key={`${item[keyField] || 'row'}-${index}`} onClick={(e) => { if(onClick) onClick(item, e); }} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col cursor-pointer hover:border-sky-300 hover:shadow-md transition-all active:scale-[0.98]">
+          {renderHeader && (
+            <div className="flex justify-between items-start mb-2">
+              {renderHeader(item, index)}
+            </div>
+          )}
+          {renderTitle && (
+            <div className="mb-3">
+              {renderTitle(item, index)}
+            </div>
+          )}
+          {renderFields && (
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col gap-2">
+              {renderFields(item, index).filter(Boolean).map((field, i) => (
+                <div key={i} className="flex items-center gap-2 text-[13px]">
+                  <div className="w-6 h-6 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 shrink-0">
+                    {field.icon || <Info className="w-3.5 h-3.5" />}
+                  </div>
+                  <div className="min-w-0 flex-1 flex justify-between items-start gap-2">
+                    <span className="font-medium text-slate-500 shrink-0">{field.label}:</span>
+                    <span className={`font-bold text-right break-words ${field.valueClassName || 'text-slate-700'}`}>{field.value}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {renderActions && (
+            <div className="mt-3 flex gap-2 pt-3 border-t border-slate-100" onClick={(e) => e.stopPropagation()}>
+              {renderActions(item, index)}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function App() {
   const [activeMenu, setActiveMenu] = useState(() => {
     return localStorage.getItem('shk_active_menu') || 'daily_prices';
@@ -546,7 +594,7 @@ export default function App() {
   ];
 
 
-  const mobileNavItems = menus.filter(item => ['daily_prices', 'customers', 'billing', 'stock'].includes(item.id));
+  const mobileNavItems = menus.filter(item => ['daily_prices', 'customers', 'billing', 'lock'].includes(item.id));
   const activeNavIndex = mobileNavItems.findIndex(item => item.id === activeMenu);
 
   const requestAPI = async (action, sheetName, payload = {}) => {
@@ -933,6 +981,8 @@ export default function App() {
           }
         }
 
+        
+
         .is-custom-dragging {
             touch-action: none !important;
             overflow: hidden !important; 
@@ -1301,7 +1351,7 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[70] flex items-center justify-center p-4 font-body">
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[120] flex items-center justify-center p-4 font-body">
       <div className="bg-white rounded-[24px] w-full max-w-4xl shadow-2xl flex flex-col h-[95vh] overflow-hidden animate-in fade-in zoom-in duration-200">
         <div className="px-6 py-4 flex justify-between items-center bg-white border-b border-slate-100 shrink-0">
           <div className="flex items-center gap-3">
@@ -1735,7 +1785,7 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
   };
 
   return (
-    <div className="flex flex-col font-body pb-10 w-full gap-4 md:gap-5">
+    <div className="flex flex-col font-body pb-[100px] md:pb-10 w-full gap-4 md:gap-5">
       <div ref={headerRef} className="sticky sticky-header-module z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col">
         <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
           <div className="w-full mx-auto px-4 md:px-8 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
@@ -1763,7 +1813,7 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
       </div>
 
       <div ref={filterRef} className="w-full pointer-events-none sticky sticky-filter-module z-20 transition-all duration-300 ease-in-out">
-        <div className="w-full mx-auto pointer-events-none relative h-[56px] z-50">
+        <div className="w-full mx-auto pointer-events-none relative h-[68px] z-50">
           <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 mx-auto pointer-events-auto origin-top sticky-filter-inner flex flex-row items-center transition-all">
             <div className="relative w-full">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -1774,8 +1824,8 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
       </div>
 
       <div className="w-full px-4 md:px-8 flex-1">
-        <div className="bg-white rounded-[24px] border border-slate-100/60 shadow-[0_2px_20px_rgba(0,0,0,0.02)] flex flex-col overflow-hidden">
-          <div className="overflow-x-auto">
+        <div className="md:bg-white md:rounded-[24px] md:border md:border-slate-100/60 md:shadow-[0_2px_20px_rgba(0,0,0,0.02)] flex flex-col overflow-hidden">
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse whitespace-nowrap min-w-[800px]">
               <thead className="bg-slate-50/50 border-b border-slate-100">
                 <tr>
@@ -1815,6 +1865,43 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
               </tbody>
             </table>
           </div>
+          <MobileCardView 
+            data={!isFetchingTable ? filteredPrices.slice(0, visibleCount) : []}
+            keyField="id"
+            onClick={(entry) => openModal(entry, true)}
+            emptyText="ไม่พบประวัติราคารับซื้อ"
+            renderHeader={(entry) => (
+              <>
+                <div className="flex items-center gap-2.5">
+                  <span className="font-bold text-slate-500 text-[14px] font-mono-code tracking-wide">{entry.id}</span>
+                </div>
+                <div className="text-right whitespace-nowrap shrink-0 ml-2">
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[12px] font-bold border bg-slate-50 text-slate-600 border-slate-200 shadow-sm">
+                    {formatDateTh(entry.date)}
+                  </span>
+                </div>
+              </>
+            )}
+            renderTitle={(entry) => (
+              <h4 className="font-bold text-slate-800 text-[16px] leading-tight">อัปเดตราคา {entry.items?.length || 0} รายการ</h4>
+            )}
+            renderFields={(entry) => {
+              const fields = (entry.items || []).map(item => ({
+                icon: <Tag className="w-3.5 h-3.5 text-slate-500" />,
+                label: item.name || item.id || 'สินค้า',
+                value: item.todayPrice ? `${Number(item.todayPrice).toLocaleString()} ฿` : '-',
+                valueClassName: 'text-slate-800'
+              }));
+              return fields;
+            }}
+            renderActions={(entry) => (
+              <>
+                <button onClick={() => openModal(entry, true)} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-xl transition-colors font-medium text-xs"><Info className="w-4 h-4" /> ดูข้อมูล</button>
+                <button onClick={() => openModal(entry, false)} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs"><Edit className="w-4 h-4" /> แก้ไข</button>
+                <button onClick={() => setConfirmDelete({ isOpen: true, id: entry.id })} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-xs"><Trash2 className="w-4 h-4" /> ลบ</button>
+              </>
+            )}
+          />
           {!isFetchingTable && visibleCount < filteredPrices.length && (
             <div id="scroll-sentinel-price" className="h-16 flex items-center justify-center text-sky-500"><Loader2 className="w-6 h-6 animate-spin" /></div>
           )}
@@ -1822,7 +1909,7 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
           <div className="bg-white rounded-[24px] w-full max-w-5xl shadow-2xl flex flex-col h-[95vh] overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="px-6 py-4 flex justify-between items-center bg-white border-b border-slate-100 shrink-0">
               <div className="flex items-center gap-4">
@@ -2292,7 +2379,7 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
   });
 
   return (
-    <div className="flex flex-col font-body pb-10 w-full gap-4 md:gap-5">
+    <div className="flex flex-col font-body pb-[100px] md:pb-10 w-full gap-4 md:gap-5">
       <div ref={headerRef} className="sticky sticky-header-module z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col">
         <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
           <div className="w-full mx-auto px-4 md:px-8 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
@@ -2346,7 +2433,7 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
       </div>
 
       <div ref={filterRef} className="w-full pointer-events-none sticky sticky-filter-module z-20 transition-all duration-300 ease-in-out">
-        <div className="w-full mx-auto pointer-events-none relative h-[56px] z-50">
+        <div className="w-full mx-auto pointer-events-none relative h-[68px] z-50">
           <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 mx-auto pointer-events-auto origin-top sticky-filter-inner flex flex-row items-center transition-all">
             <div className="relative w-full">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -2357,8 +2444,8 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
       </div>
 
       <div className="w-full px-4 md:px-8 flex-1">
-        <div className="bg-white rounded-[24px] border border-slate-100/60 shadow-[0_2px_20px_rgba(0,0,0,0.02)] flex flex-col overflow-hidden">
-          <div className="overflow-x-auto">
+        <div className="md:bg-white md:rounded-[24px] md:border md:border-slate-100/60 md:shadow-[0_2px_20px_rgba(0,0,0,0.02)] flex flex-col overflow-hidden">
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse whitespace-nowrap min-w-[1000px]">
               <thead className="bg-slate-50/50 border-b border-slate-100">
                 <tr>
@@ -2434,6 +2521,60 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
               </tbody>
             </table>
           </div>
+          <MobileCardView 
+            data={!isFetchingTable ? filteredLocks.slice(0, visibleCount) : []}
+            keyField="id"
+            onClick={(lock) => openModal(lock, true)}
+            emptyText="ไม่พบประวัติโควตาน้ำหนัก"
+            renderHeader={(lock) => (
+              <>
+                <div className="flex items-center gap-2.5">
+                  <span className="font-bold text-slate-500 text-[14px] font-mono-code tracking-wide">{lock.id}</span>
+                </div>
+                <div className="text-right whitespace-nowrap shrink-0 ml-2">
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[12px] font-bold border bg-slate-50 text-slate-600 border-slate-200 shadow-sm">
+                    {formatDateTh(lock.date)}
+                  </span>
+                </div>
+              </>
+            )}
+            renderTitle={(lock) => (
+              <h4 className="font-bold text-slate-800 text-[15px] leading-tight">{lock.note || 'ไม่มีหมายเหตุ'}</h4>
+            )}
+            renderFields={(lock) => {
+              const lockDateStr = lock.date ? lock.date.split('T')[0] : '';
+              const totalQuotaRow = Number(lock.dailyLimitKg) || 0;
+              const usedQuotaRow = (stockData || [])
+                .filter(s => s.quotaId ? (s.quotaId === lock.id) : (s.quotaDate === lockDateStr || (!s.quotaDate && (s.date || '').startsWith(lockDateStr))))
+                .reduce((sum, s) => sum + (Number(s.quantity) || 0), 0);
+              const remainingQuotaRow = totalQuotaRow - usedQuotaRow;
+              return [
+                { icon: <Lock className="w-3.5 h-3.5 text-slate-500" />, label: 'โควตารวม', value: `${totalQuotaRow.toLocaleString()} ${lock.dailyLimitUnit || 'Kg.'}`, valueClassName: 'text-slate-700' },
+                { icon: <CheckCircle className="w-3.5 h-3.5 text-sky-500" />, label: 'ตัดโควตาแล้ว', value: `${usedQuotaRow.toLocaleString()} ${lock.dailyLimitUnit || 'Kg.'}`, valueClassName: 'text-sky-600' },
+                { icon: <Info className={`w-3.5 h-3.5 ${remainingQuotaRow < 0 ? 'text-rose-500' : 'text-emerald-500'}`} />, label: 'คงเหลือ', value: `${remainingQuotaRow.toLocaleString()} ${lock.dailyLimitUnit || 'Kg.'}`, valueClassName: remainingQuotaRow < 0 ? 'text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md' : 'text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md' }
+              ];
+            }}
+            renderActions={(lock) => (
+              <>
+                <button onClick={() => openModal(lock, true)} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-xl transition-colors font-medium text-xs"><Info className="w-4 h-4" /> ดูข้อมูล</button>
+                <button onClick={() => openModal(lock, false)} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs"><Edit className="w-4 h-4" /> แก้ไข</button>
+                <button onClick={() => {
+                  const associatedStocks = (stockData || []).filter(s => {
+                     if (s.quotaId === lock.id) return true;
+                     if ((s.id || '').startsWith('TRANSF-')) {
+                        const parts = s.id.split('-');
+                        if (parts.length >= 4) {
+                           const ts = parts[1];
+                           return (stockData || []).some(ps => (ps.id || '').startsWith(`TRANSF-${ts}-`) && ps.quotaId === lock.id);
+                        }
+                     }
+                     return false;
+                  });
+                  setConfirmDelete({ isOpen: true, id: lock.id, data: associatedStocks });
+                }} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-xs"><Trash2 className="w-4 h-4" /> ลบ</button>
+              </>
+            )}
+          />
           {!isFetchingTable && visibleCount < filteredLocks.length && (
             <div id="scroll-sentinel-lock" className="h-16 flex items-center justify-center text-sky-500"><Loader2 className="w-6 h-6 animate-spin" /></div>
           )}
@@ -2441,7 +2582,7 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
           <div className="bg-white rounded-[24px] w-full max-w-5xl shadow-2xl flex flex-col h-[95vh] overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="px-6 py-4 flex justify-between items-center bg-white border-b border-slate-100 shrink-0">
               <div className="flex items-center gap-4">
@@ -2750,7 +2891,7 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
   };
 
   return (
-    <div className="flex flex-col font-body pb-10 w-full gap-4 md:gap-5">
+    <div className="flex flex-col font-body pb-[100px] md:pb-10 w-full gap-4 md:gap-5">
       <div ref={headerRef} className="sticky sticky-header-module z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col">
         <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
           <div className="w-full mx-auto px-4 md:px-8 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
@@ -2792,7 +2933,7 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
       </div>
 
       <div ref={filterRef} className="w-full pointer-events-none sticky sticky-filter-module z-20 transition-all duration-300 ease-in-out">
-        <div className="w-full mx-auto pointer-events-none relative h-[56px] z-50">
+        <div className="w-full mx-auto pointer-events-none relative h-[68px] z-50">
           <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 mx-auto pointer-events-auto origin-top sticky-filter-inner flex flex-row items-center transition-all">
             <div className="relative w-full">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -2803,8 +2944,8 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
       </div>
 
       <div className="w-full px-4 md:px-8 flex-1">
-        <div className="bg-white rounded-[24px] border border-slate-100/60 shadow-[0_2px_20px_rgba(0,0,0,0.02)] flex flex-col overflow-hidden">
-          <div className="overflow-x-auto">
+        <div className="md:bg-white md:rounded-[24px] md:border md:border-slate-100/60 md:shadow-[0_2px_20px_rgba(0,0,0,0.02)] flex flex-col overflow-hidden">
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse whitespace-nowrap min-w-[800px]">
               <thead className="bg-slate-50/50 border-b border-slate-100">
                 <tr>
@@ -2854,6 +2995,43 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
               </tbody>
             </table>
           </div>
+          <MobileCardView 
+            data={!isFetchingTable ? filteredCustomers.slice(0, visibleCount) : []}
+            keyField="id"
+            onClick={(c) => openModal(c, true)}
+            emptyText="ไม่พบข้อมูลลูกค้าในระบบ"
+            renderHeader={(c) => (
+              <>
+                <div className="flex items-center gap-2.5">
+                  <span className="font-black text-sky-600 text-[15px] font-mono-code tracking-wide">{c.id}</span>
+                  <span className="px-2 py-0.5 rounded-md text-[12px] font-bold whitespace-nowrap bg-indigo-50 text-indigo-600 border border-indigo-100 shadow-sm px-2.5 py-1">{c.type === 'Regular' ? 'ลูกค้าทั่วไป' : c.type}</span>
+                </div>
+                <div className="text-right whitespace-nowrap shrink-0 ml-2">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[12px] font-bold border shadow-sm px-2.5 py-1 ${c.status === 'Active' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
+                    {c.status === 'Active' ? '✔ ยินยอม' : 'ระงับข้อมูล'}
+                  </span>
+                </div>
+              </>
+            )}
+            renderTitle={(c) => (
+              <>
+                <h4 className="font-bold text-slate-800 text-[16px] leading-tight">{c.name}</h4>
+                <div className="mt-1.5">
+                  <a href={`tel:${c.phone}`} onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1.5 text-slate-600 hover:text-sky-600 font-medium text-[11px] bg-slate-50 px-2 py-1 rounded-lg border border-slate-100 w-fit transition-colors">
+                    <Phone className="w-3.5 h-3.5 text-sky-500" /> {c.phone || 'ไม่มีเบอร์โทร'}
+                  </a>
+                </div>
+              </>
+            )}
+            renderFields={(c) => []}
+            renderActions={(c) => (
+              <>
+                <button className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-xl transition-colors font-medium text-xs"><Printer className="w-4 h-4" /> พิมพ์</button>
+                <button onClick={() => openModal(c, false)} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs"><Edit className="w-4 h-4" /> แก้ไข</button>
+                <button onClick={() => setConfirmDelete({ isOpen: true, id: c.id })} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-xs"><Trash2 className="w-4 h-4" /> ลบ</button>
+              </>
+            )}
+          />
           {!isFetchingTable && visibleCount < filteredCustomers.length && (
             <div id="scroll-sentinel-customer" className="h-16 flex items-center justify-center text-sky-500"><Loader2 className="w-6 h-6 animate-spin" /></div>
           )}
@@ -2861,7 +3039,7 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
           <div className="bg-white rounded-[24px] w-full max-w-4xl shadow-2xl flex flex-col max-h-[95vh] overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="px-6 py-4 flex justify-between items-center bg-white border-b border-slate-100 shrink-0">
               <div className="flex items-center gap-4">
@@ -3078,7 +3256,7 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
   };
 
   return (
-    <div className="flex flex-col font-body pb-10 w-full gap-4 md:gap-5">
+    <div className="flex flex-col font-body pb-[100px] md:pb-10 w-full gap-4 md:gap-5">
       <div ref={headerRef} className="sticky sticky-header-module z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col">
         <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
           <div className="w-full mx-auto px-4 md:px-8 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
@@ -3120,7 +3298,7 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
       </div>
 
       <div ref={filterRef} className="w-full pointer-events-none sticky sticky-filter-module z-20 transition-all duration-300 ease-in-out">
-        <div className="w-full mx-auto pointer-events-none relative h-[56px] z-50">
+        <div className="w-full mx-auto pointer-events-none relative h-[68px] z-50">
           <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 mx-auto pointer-events-auto origin-top sticky-filter-inner flex flex-row items-center transition-all">
             <div className="relative w-full">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -3131,8 +3309,8 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
       </div>
 
       <div className="w-full px-4 md:px-8 flex-1">
-        <div className="bg-white rounded-[24px] border border-slate-100/60 shadow-[0_2px_20px_rgba(0,0,0,0.02)] flex flex-col overflow-hidden">
-          <div className="overflow-x-auto">
+        <div className="md:bg-white md:rounded-[24px] md:border md:border-slate-100/60 md:shadow-[0_2px_20px_rgba(0,0,0,0.02)] flex flex-col overflow-hidden">
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse whitespace-nowrap min-w-[800px]">
               <thead className="bg-slate-50/50 border-b border-slate-100">
                 <tr>
@@ -3186,6 +3364,38 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
               </tbody>
             </table>
           </div>
+          <MobileCardView 
+            data={!isFetchingTable ? filteredProducts.slice(0, visibleCount) : []}
+            keyField="id"
+            onClick={(p) => openModal(p, true)}
+            emptyText="ไม่พบรายการสินค้า"
+            renderHeader={(p) => (
+              <>
+                <div className="flex items-center gap-2.5">
+                  <span className="font-black text-sky-600 text-[15px] font-mono-code tracking-wide">{p.id}</span>
+                  <span className="px-2 py-0.5 rounded-md text-[12px] font-bold whitespace-nowrap bg-indigo-50 text-indigo-600 border border-indigo-100 shadow-sm px-2.5 py-1">{p.category}</span>
+                </div>
+                <div className="text-right whitespace-nowrap shrink-0 ml-2">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[12px] font-bold border shadow-sm px-2.5 py-1 ${p.status === 'Active' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
+                    {p.status === 'Active' ? '✔ ใช้งาน' : 'ยกเลิก'}
+                  </span>
+                </div>
+              </>
+            )}
+            renderTitle={(p) => (
+              <h4 className="font-bold text-slate-800 text-[16px] leading-tight">{p.name}</h4>
+            )}
+            renderFields={(p) => [
+              { icon: <CircleDollarSign className="w-3.5 h-3.5 text-slate-500" />, label: 'ราคารับซื้อ', value: p.buyPrice ? `${Number(p.buyPrice).toLocaleString()} ฿ / ${p.unit}` : '-', valueClassName: 'text-slate-800' }
+            ]}
+            renderActions={(p) => (
+              <>
+                <button onClick={() => openModal(p, true)} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-xl transition-colors font-medium text-xs"><Info className="w-4 h-4" /> ดูข้อมูล</button>
+                <button onClick={() => openModal(p, false)} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs"><Edit className="w-4 h-4" /> แก้ไข</button>
+                <button onClick={() => setConfirmDelete({ isOpen: true, id: p.id })} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-xs"><Trash2 className="w-4 h-4" /> ลบ</button>
+              </>
+            )}
+          />
           {!isFetchingTable && visibleCount < filteredProducts.length && (
             <div id="scroll-sentinel-product" className="h-16 flex items-center justify-center text-sky-500"><Loader2 className="w-6 h-6 animate-spin" /></div>
           )}
@@ -3193,7 +3403,7 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
           <div className="bg-white rounded-[24px] w-full max-w-4xl shadow-2xl flex flex-col max-h-[95vh] overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="px-6 py-4 flex justify-between items-center bg-white border-b border-slate-100 shrink-0">
               <div className="flex items-center gap-4">
@@ -3442,7 +3652,7 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
   };
 
   return (
-    <div className="flex flex-col font-body pb-10 w-full gap-4 md:gap-5">
+    <div className="flex flex-col font-body pb-[100px] md:pb-10 w-full gap-4 md:gap-5">
       <div ref={headerRef} className="sticky sticky-header-module z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col">
         <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
           <div className="w-full mx-auto px-4 md:px-8 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
@@ -3484,7 +3694,7 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
       </div>
 
       <div ref={filterRef} className="w-full pointer-events-none sticky sticky-filter-module z-20 transition-all duration-300 ease-in-out">
-        <div className="w-full mx-auto pointer-events-none relative h-[56px] z-50">
+        <div className="w-full mx-auto pointer-events-none relative h-[68px] z-50">
           <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 mx-auto pointer-events-auto origin-top sticky-filter-inner flex flex-row items-center transition-all">
             <div className="relative w-full">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -3495,8 +3705,8 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
       </div>
 
       <div className="w-full px-4 md:px-8 flex-1">
-        <div className="bg-white rounded-[24px] border border-slate-100/60 shadow-[0_2px_20px_rgba(0,0,0,0.02)] flex flex-col overflow-hidden">
-          <div className="overflow-x-auto">
+        <div className="md:bg-white md:rounded-[24px] md:border md:border-slate-100/60 md:shadow-[0_2px_20px_rgba(0,0,0,0.02)] flex flex-col overflow-hidden">
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse whitespace-nowrap min-w-[800px]">
               <thead className="bg-slate-50/50 border-b border-slate-100">
                 <tr>
@@ -3629,6 +3839,62 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
               </tbody>
             </table>
           </div>
+          <MobileCardView 
+            data={!isFetchingTable ? filteredStocks.slice(0, visibleCount) : []}
+            keyField="id"
+            onClick={(s) => openModal(s, true)}
+            emptyText="ไม่พบประวัติสต๊อกสินค้า"
+            renderHeader={(s) => {
+              const isPositive = Number(s.quantity) > 0;
+              const isNegative = Number(s.quantity) < 0;
+              const isTransferByNote = s.note && (s.note.includes('โอนยอด') || s.note.includes('รับยอด'));
+              const isTransferById = s.id && String(s.id).startsWith('TRANSF-');
+              const isTransfer = isTransferByNote || isTransferById;
+              const typeLabel = isTransfer ? (isPositive ? 'รับยอด' : 'โอนยอด') : (isPositive ? 'รับซื้อ (จ่าย)' : isNegative ? 'ขายออก (รับ)' : 'ปรับปรุงสต๊อก');
+              const typeColor = isTransfer ? 'bg-amber-50 text-amber-600 border-amber-100' : isPositive ? 'bg-sky-50 text-sky-600 border-sky-100' : isNegative ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-600 border-slate-200';
+              
+              return (
+                <>
+                  <div className="flex items-center gap-2.5">
+                    <span className="font-black text-sky-600 text-[15px] font-mono-code tracking-wide">{s.refId || s.id}</span>
+                    <span className={`px-2 py-0.5 rounded-md text-[12px] font-bold whitespace-nowrap border shadow-sm px-2.5 py-1 ${typeColor}`}>{typeLabel}</span>
+                  </div>
+                  <div className="text-right whitespace-nowrap shrink-0 ml-2">
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[12px] font-bold border bg-slate-50 text-slate-600 border-slate-200 shadow-sm">
+                      {formatDateTh(s.date)}
+                    </span>
+                  </div>
+                </>
+              );
+            }}
+            renderTitle={(s) => {
+              const isPositive = Number(s.quantity) > 0;
+              const isNegative = Number(s.quantity) < 0;
+              return (
+                <div className="flex justify-between items-center">
+                  <h4 className="font-bold text-slate-800 text-[16px] leading-tight">{s.name}</h4>
+                  <span className={`font-mono-code font-bold text-[16px] ${isPositive ? 'text-emerald-600' : isNegative ? 'text-rose-600' : 'text-slate-600'}`}>
+                    {isPositive ? '+' : ''}{s.quantity ? Number(s.quantity).toLocaleString() : '0'} <span className="text-[12px] font-normal text-slate-500">{s.unit || 'กก.'}</span>
+                  </span>
+                </div>
+              );
+            }}
+            renderFields={(s) => [
+              { icon: <Info className="w-3.5 h-3.5" />, label: 'หมายเหตุ', value: s.note || '-' },
+              { icon: <CalendarClock className="w-3.5 h-3.5" />, label: 'อ้างอิงโควตา', value: s.quotaDate ? formatDateTh(s.quotaDate) : '-' }
+            ]}
+            renderActions={(s) => (
+              <>
+                <button onClick={() => openModal(s, true)} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-xl transition-colors font-medium text-xs"><Info className="w-4 h-4" /> ดูข้อมูล</button>
+                {!(s.refId && (s.refId.startsWith('REC') || s.refId.startsWith('INV'))) && (
+                  <button onClick={() => openModal(s, false)} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs"><Edit className="w-4 h-4" /> แก้ไข</button>
+                )}
+                {!(s.refId && (s.refId.startsWith('REC') || s.refId.startsWith('INV'))) && (
+                  <button onClick={() => setConfirmDelete({ isOpen: true, id: s.id, refId: s.refId })} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-xs"><Trash2 className="w-4 h-4" /> ลบ</button>
+                )}
+              </>
+            )}
+          />
           {!isFetchingTable && visibleCount < filteredStocks.length && (
             <div id="scroll-sentinel-stock" className="h-16 flex items-center justify-center text-sky-500"><Loader2 className="w-6 h-6 animate-spin" /></div>
           )}
@@ -3636,7 +3902,7 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
           <div className="bg-white rounded-[24px] w-full max-w-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="px-6 py-4 flex justify-between items-center bg-white border-b border-slate-100 shrink-0">
               <div className="flex items-center gap-4">
@@ -3869,7 +4135,7 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
   };
 
   return (
-    <div className="flex flex-col font-body pb-10 w-full gap-4 md:gap-5">
+    <div className="flex flex-col font-body pb-[100px] md:pb-10 w-full gap-4 md:gap-5">
       <div ref={headerRef} className="sticky sticky-header-module z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col">
         <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
           <div className="w-full mx-auto px-4 md:px-8 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
@@ -3911,7 +4177,7 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
       </div>
 
       <div ref={filterRef} className="w-full pointer-events-none sticky sticky-filter-module z-20 transition-all duration-300 ease-in-out">
-        <div className="w-full mx-auto pointer-events-none relative h-[56px] z-50">
+        <div className="w-full mx-auto pointer-events-none relative h-[68px] z-50">
           <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 mx-auto pointer-events-auto origin-top sticky-filter-inner flex flex-row items-center transition-all">
             <div className="relative w-full">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -3922,8 +4188,8 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
       </div>
 
       <div className="w-full px-4 md:px-8 flex-1">
-        <div className="bg-white rounded-[24px] border border-slate-100/60 shadow-[0_2px_20px_rgba(0,0,0,0.02)] flex flex-col overflow-hidden">
-          <div className="overflow-x-auto">
+        <div className="md:bg-white md:rounded-[24px] md:border md:border-slate-100/60 md:shadow-[0_2px_20px_rgba(0,0,0,0.02)] flex flex-col overflow-hidden">
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse whitespace-nowrap min-w-[800px]">
               <thead className="bg-slate-50/50 border-b border-slate-100">
                 <tr>
@@ -4035,6 +4301,44 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
               </tbody>
             </table>
           </div>
+          <MobileCardView 
+            data={!isFetchingTable ? filteredBills.slice(0, visibleCount) : []}
+            keyField="id"
+            onClick={(b) => openModal(b, true)}
+            emptyText="ไม่พบประวัติบิล"
+            renderHeader={(b) => (
+              <>
+                <div className="flex items-center gap-2.5">
+                  <span className="font-black text-sky-600 text-[15px] font-mono-code tracking-wide">{b.id}</span>
+                  <span className={`px-2 py-0.5 rounded-md text-[12px] font-bold whitespace-nowrap border shadow-sm px-2.5 py-1 ${b.type === 'BUY' ? 'bg-sky-50 text-sky-600 border-sky-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
+                    {b.type === 'BUY' ? 'บิลรับซื้อ' : 'บิลขายออก'}
+                  </span>
+                </div>
+                <div className="text-right whitespace-nowrap shrink-0 ml-2">
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[12px] font-bold border bg-slate-50 text-slate-600 border-slate-200 shadow-sm">
+                    {formatDateTh(b.date)}
+                  </span>
+                </div>
+              </>
+            )}
+            renderTitle={(b) => (
+              <h4 className="font-bold text-slate-800 text-[16px] leading-tight truncate">{b.customerName || 'ลูกค้าทั่วไป'}</h4>
+            )}
+            renderFields={(b) => {
+              const totalWeight = (b.items || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+              return [
+                { icon: <Box className="w-3.5 h-3.5 text-slate-500" />, label: 'น้ำหนักรวม', value: `${totalWeight.toLocaleString()} กก.`, valueClassName: 'text-slate-800' },
+                { icon: <CircleDollarSign className="w-3.5 h-3.5 text-sky-500" />, label: 'ยอดรวม (บาท)', value: b.grandTotal ? Number(b.grandTotal).toLocaleString() : '0', valueClassName: 'text-sky-600' }
+              ];
+            }}
+            renderActions={(b) => (
+              <>
+                <button className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-xl transition-colors font-medium text-xs"><Printer className="w-4 h-4" /> พิมพ์</button>
+                <button onClick={() => openModal(b, true)} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs"><Info className="w-4 h-4" /> ดูบิล</button>
+                <button onClick={() => setConfirmDelete({ isOpen: true, id: b.id })} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-xs"><Trash2 className="w-4 h-4" /> ลบ</button>
+              </>
+            )}
+          />
           {!isFetchingTable && visibleCount < filteredBills.length && (
             <div id="scroll-sentinel-billing" className="h-16 flex items-center justify-center text-sky-500"><Loader2 className="w-6 h-6 animate-spin" /></div>
           )}
