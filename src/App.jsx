@@ -764,7 +764,7 @@ export default function App() {
       {/* =========================================
           MAIN CONTENT AREA
           ========================================= */}
-      <main ref={mainRef} className="flex-1 flex flex-col overflow-y-auto relative bg-slate-50 custom-scroll" id="main-scroll-container">
+      <main ref={mainRef} className="flex-1 flex flex-col overflow-y-auto relative bg-slate-50 custom-scroll" id="main-scroll-container" style={{ "--header-offset": (isMobile && showMobileBars) ? "56px" : "0px" }}>
         
         {/* Spacers for Mobile to prevent content from hiding behind fixed headers/footers */}
         <div className={`md:hidden shrink-0 w-full transition-all duration-300 ${showMobileBars ? 'h-[64px]' : 'h-0'}`}></div>
@@ -915,7 +915,25 @@ export default function App() {
         @media (max-width: 768px) { .is-scrolled.sticky-filter-inner, .is-scrolled .sticky-filter-inner { padding-top: 2.125rem; padding-bottom: 0.875rem; padding-left: 1rem; padding-right: 1rem; } }
       
         /* คลาสสำหรับระบบ Drag & Drop 60FPS */
-        body.is-custom-dragging {
+        body
+        .sticky-header-module {
+          top: var(--header-offset);
+        }
+        @media (min-width: 768px) {
+          .sticky-header-module {
+            top: 0;
+          }
+        }
+        .sticky-filter-module {
+          top: calc(var(--header-offset) + 64px);
+        }
+        @media (min-width: 768px) {
+          .sticky-filter-module {
+            top: 72px;
+          }
+        }
+
+        .is-custom-dragging {
             touch-action: none !important;
             overflow: hidden !important; 
         }
@@ -1718,7 +1736,7 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
 
   return (
     <div className="flex flex-col font-body pb-10 w-full gap-4 md:gap-5">
-      <div ref={headerRef} className="sticky top-0 z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col">
+      <div ref={headerRef} className="sticky sticky-header-module z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col">
         <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
           <div className="w-full mx-auto px-4 md:px-8 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
             <div>
@@ -1744,7 +1762,7 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
         </div>
       </div>
 
-      <div ref={filterRef} className="w-full pointer-events-none sticky z-20 transition-all duration-300 ease-in-out top-[64px] md:top-[72px]">
+      <div ref={filterRef} className="w-full pointer-events-none sticky sticky-filter-module z-20 transition-all duration-300 ease-in-out">
         <div className="w-full mx-auto pointer-events-none relative h-[56px] z-50">
           <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 mx-auto pointer-events-auto origin-top sticky-filter-inner flex flex-row items-center transition-all">
             <div className="relative w-full">
@@ -2275,7 +2293,7 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
 
   return (
     <div className="flex flex-col font-body pb-10 w-full gap-4 md:gap-5">
-      <div ref={headerRef} className="sticky top-0 z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col">
+      <div ref={headerRef} className="sticky sticky-header-module z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col">
         <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
           <div className="w-full mx-auto px-4 md:px-8 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
             <div>
@@ -2327,7 +2345,7 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
         </div>
       </div>
 
-      <div ref={filterRef} className="w-full pointer-events-none sticky z-20 transition-all duration-300 ease-in-out top-[64px] md:top-[72px]">
+      <div ref={filterRef} className="w-full pointer-events-none sticky sticky-filter-module z-20 transition-all duration-300 ease-in-out">
         <div className="w-full mx-auto pointer-events-none relative h-[56px] z-50">
           <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 mx-auto pointer-events-auto origin-top sticky-filter-inner flex flex-row items-center transition-all">
             <div className="relative w-full">
@@ -2733,7 +2751,7 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
 
   return (
     <div className="flex flex-col font-body pb-10 w-full gap-4 md:gap-5">
-      <div ref={headerRef} className="sticky top-0 z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col">
+      <div ref={headerRef} className="sticky sticky-header-module z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col">
         <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
           <div className="w-full mx-auto px-4 md:px-8 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
             <div>
@@ -2773,7 +2791,7 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
         </div>
       </div>
 
-      <div ref={filterRef} className="w-full pointer-events-none sticky z-20 transition-all duration-300 ease-in-out top-[64px] md:top-[72px]">
+      <div ref={filterRef} className="w-full pointer-events-none sticky sticky-filter-module z-20 transition-all duration-300 ease-in-out">
         <div className="w-full mx-auto pointer-events-none relative h-[56px] z-50">
           <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 mx-auto pointer-events-auto origin-top sticky-filter-inner flex flex-row items-center transition-all">
             <div className="relative w-full">
@@ -3061,7 +3079,7 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
 
   return (
     <div className="flex flex-col font-body pb-10 w-full gap-4 md:gap-5">
-      <div ref={headerRef} className="sticky top-0 z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col">
+      <div ref={headerRef} className="sticky sticky-header-module z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col">
         <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
           <div className="w-full mx-auto px-4 md:px-8 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
             <div>
@@ -3101,7 +3119,7 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
         </div>
       </div>
 
-      <div ref={filterRef} className="w-full pointer-events-none sticky z-20 transition-all duration-300 ease-in-out top-[64px] md:top-[72px]">
+      <div ref={filterRef} className="w-full pointer-events-none sticky sticky-filter-module z-20 transition-all duration-300 ease-in-out">
         <div className="w-full mx-auto pointer-events-none relative h-[56px] z-50">
           <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 mx-auto pointer-events-auto origin-top sticky-filter-inner flex flex-row items-center transition-all">
             <div className="relative w-full">
@@ -3425,7 +3443,7 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
 
   return (
     <div className="flex flex-col font-body pb-10 w-full gap-4 md:gap-5">
-      <div ref={headerRef} className="sticky top-0 z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col">
+      <div ref={headerRef} className="sticky sticky-header-module z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col">
         <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
           <div className="w-full mx-auto px-4 md:px-8 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
             <div>
@@ -3465,7 +3483,7 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
         </div>
       </div>
 
-      <div ref={filterRef} className="w-full pointer-events-none sticky z-20 transition-all duration-300 ease-in-out top-[64px] md:top-[72px]">
+      <div ref={filterRef} className="w-full pointer-events-none sticky sticky-filter-module z-20 transition-all duration-300 ease-in-out">
         <div className="w-full mx-auto pointer-events-none relative h-[56px] z-50">
           <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 mx-auto pointer-events-auto origin-top sticky-filter-inner flex flex-row items-center transition-all">
             <div className="relative w-full">
@@ -3852,7 +3870,7 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
 
   return (
     <div className="flex flex-col font-body pb-10 w-full gap-4 md:gap-5">
-      <div ref={headerRef} className="sticky top-0 z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col">
+      <div ref={headerRef} className="sticky sticky-header-module z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col">
         <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
           <div className="w-full mx-auto px-4 md:px-8 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
             <div>
@@ -3892,7 +3910,7 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
         </div>
       </div>
 
-      <div ref={filterRef} className="w-full pointer-events-none sticky z-20 transition-all duration-300 ease-in-out top-[64px] md:top-[72px]">
+      <div ref={filterRef} className="w-full pointer-events-none sticky sticky-filter-module z-20 transition-all duration-300 ease-in-out">
         <div className="w-full mx-auto pointer-events-none relative h-[56px] z-50">
           <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 mx-auto pointer-events-auto origin-top sticky-filter-inner flex flex-row items-center transition-all">
             <div className="relative w-full">
