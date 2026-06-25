@@ -42,21 +42,23 @@ const ConfirmAlert = ({ isOpen, title, text, onConfirm, onCancel, children }) =>
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
       <div className={`bg-white rounded-[24px] w-full ${children ? 'max-w-4xl' : 'max-w-sm'} shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]`}>
-        <div className="p-6 overflow-y-auto flex-1">
+        <div className="p-6 shrink-0 text-center pb-2">
           <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4 text-rose-500"><AlertTriangle className="w-8 h-8" /></div>
-          <h3 className="text-[20px] font-bold text-slate-800 mb-2 text-center">{title}</h3>
-          {text && <p className="text-[15px] text-slate-500 mb-6 text-center">{text}</p>}
-          
-          {children && (
-            <div className="my-4 border border-slate-100 rounded-[16px] overflow-hidden">
+          <h3 className="text-[20px] font-bold text-slate-800 mb-2">{title}</h3>
+          {text && <p className="text-[15px] text-slate-500">{text}</p>}
+        </div>
+        
+        {children && (
+          <div className="px-6 py-2 overflow-y-auto flex-1 min-h-[100px]">
+            <div className="border border-slate-100 rounded-[16px] overflow-hidden">
               {children}
             </div>
-          )}
-
-          <div className={`flex gap-3 mt-6 ${children ? 'justify-end' : 'justify-center w-full'}`}>
-            <button onClick={onCancel} className="px-6 py-3 bg-slate-50 text-slate-600 font-medium rounded-xl hover:bg-slate-100 transition-colors flex-1 max-w-[140px]">ยกเลิก</button>
-            <button onClick={onConfirm} className="px-6 py-3 bg-rose-500 text-white font-medium rounded-xl hover:bg-rose-600 transition-colors shadow-sm flex-1 max-w-[140px]">ยืนยัน</button>
           </div>
+        )}
+
+        <div className={`p-6 shrink-0 pt-4 flex gap-3 ${children ? 'justify-end' : 'justify-center w-full'} ${children ? 'border-t border-slate-100/60 mt-2' : 'mt-2'}`}>
+          <button onClick={onCancel} className="px-6 py-3 bg-slate-50 text-slate-600 font-medium rounded-xl hover:bg-slate-100 transition-colors flex-1 max-w-[140px]">ยกเลิก</button>
+          <button onClick={onConfirm} className="px-6 py-3 bg-rose-500 text-white font-medium rounded-xl hover:bg-rose-600 transition-colors shadow-sm flex-1 max-w-[140px]">ยืนยัน</button>
         </div>
       </div>
     </div>
@@ -66,9 +68,9 @@ const ConfirmAlert = ({ isOpen, title, text, onConfirm, onCancel, children }) =>
 const ImpactAnalysisTable = ({ items }) => {
   if (!items || items.length === 0) return null;
   return (
-    <div className="overflow-x-auto bg-white min-h-[200px]">
+    <div className="overflow-x-auto bg-white min-h-[100px]">
       <table className="w-full text-left border-collapse whitespace-nowrap min-w-[800px]">
-        <thead className="bg-slate-50 border-b border-slate-100">
+        <thead className="bg-slate-50 border-b border-slate-100 sticky top-0 z-10 shadow-sm">
           <tr>
             <th className="px-6 py-4 font-medium text-slate-500 text-[14px]">รหัสอ้างอิง</th>
             <th className="px-6 py-4 font-medium text-slate-500 text-[14px] text-center">โมดูล</th>
@@ -562,7 +564,7 @@ export default function App() {
             <BillingModule 
               setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
               billingData={billingData} setBillingData={setBillingData} customerData={customerData} productData={productData} 
-              dailyPriceData={dailyPriceData} stockData={stockData} setStockData={setStockData} openBillModal={openBillModal} isGlobalFetching={isGlobalFetching} reloadAllData={loadAllData}
+              dailyPriceData={dailyPriceData} stockData={stockData} setStockData={setStockData} lockData={lockData} openBillModal={openBillModal} isGlobalFetching={isGlobalFetching} reloadAllData={loadAllData}
             />
           ) : (
             <div className="p-4 md:p-8 h-full">
@@ -3398,7 +3400,7 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
 // ==========================================
 // 6. BILLING MODULE (ออกบิลซื้อ/ขาย)
 // ==========================================
-function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, billingData, setBillingData, customerData, productData, dailyPriceData, stockData, setStockData, openBillModal, isGlobalFetching, reloadAllData }) {
+function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, billingData, setBillingData, customerData, productData, dailyPriceData, stockData, setStockData, lockData, openBillModal, isGlobalFetching, reloadAllData }) {
   const bills = billingData || []; 
   const [isFetchingTable, setIsFetchingTable] = useState(billingData === null); 
   const [visibleCount, setVisibleCount] = useState(20); 
@@ -3618,6 +3620,7 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
                             });
 
                             const relatedStocks = (stockData || []).filter(s => s.refId === b.id);
+                            const addedLockIds = new Set();
                             for (let s of relatedStocks) {
                                 data.push({
                                     id: s.id,
@@ -3629,6 +3632,23 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
                                     weight: Math.abs(Number(s.quantity) || 0),
                                     unit: s.unit || 'กก.'
                                 });
+                                
+                                if (s.quotaId && !addedLockIds.has(s.quotaId)) {
+                                    const relatedLock = (lockData || []).find(l => l.id === s.quotaId);
+                                    if (relatedLock) {
+                                        addedLockIds.add(s.quotaId);
+                                        data.push({
+                                            id: relatedLock.id,
+                                            moduleName: 'โควตาล็อกน้ำหนัก',
+                                            typeColor: 'bg-indigo-50 text-indigo-600',
+                                            typeText: 'ตั้งโควตา',
+                                            icon: <Lock className="w-3.5 h-3.5" />,
+                                            customer: relatedLock.note || '-',
+                                            weight: relatedLock.dailyLimitKg,
+                                            unit: relatedLock.dailyLimitUnit || 'กก.'
+                                        });
+                                    }
+                                }
                             }
 
                             setConfirmDelete({ isOpen: true, id: b.id, data });
