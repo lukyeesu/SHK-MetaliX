@@ -1170,7 +1170,7 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
   const calculateAllocation = () => {
     if (formData.type !== 'BUY') return [];
     
-    let totalBillWeight = (formData.items || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+    let totalBillWeight = (formData.items || []).reduce((sum, item) => sum + ((Number(item.quantity) || 0) - (Number(item.deductWeight) || 0)), 0);
     let remainingToAllocate = totalBillWeight;
     let allocations = [];
 
@@ -1273,7 +1273,7 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
   }, [formData.date, formData.type, editingId, bills]);
 
   useEffect(() => {
-    const total = (formData.items || []).reduce((sum, item) => sum + ((Number(item.quantity) || 0) * (Number(item.price) || 0)), 0);
+    const total = (formData.items || []).reduce((sum, item) => sum + (((Number(item.quantity) || 0) - (Number(item.deductWeight) || 0)) * (Number(item.price) || 0)), 0);
     setFormData(prev => ({ ...prev, grandTotal: total }));
   }, [formData.items]);
 
@@ -1309,7 +1309,7 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
         let stockIndexCounter = 1;
         
         for (let item of formData.items) {
-          let itemQtyRemaining = Number(item.quantity) || 0;
+          let itemQtyRemaining = (Number(item.quantity) || 0) - (Number(item.deductWeight) || 0);
           if (itemQtyRemaining <= 0) continue;
 
           for (let alloc of allocations) {
@@ -1344,7 +1344,7 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
         // --- บิลขายออก (ไม่สนใจโควตา) ---
         for (let i = 0; i < formData.items.length; i++) {
           const item = formData.items[i];
-          const qtyChange = (Number(item.quantity) || 0) * -1;
+          const qtyChange = ((Number(item.quantity) || 0) - (Number(item.deductWeight) || 0)) * -1;
           if (qtyChange === 0) continue; 
           const newStockPayload = {
             id: `${billId}-${i + 1}`, refId: billId, date: formData.date, quotaDate: '',
@@ -1365,7 +1365,7 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
     }
   };
 
-  const handleAddItem = () => setFormData(prev => ({ ...prev, items: [...prev.items, { rowId: Date.now(), productId: '', name: '', quantity: '', price: '', unit: 'กก.' }] }));
+  const handleAddItem = () => setFormData(prev => ({ ...prev, items: [...prev.items, { rowId: Date.now(), productId: '', name: '', quantity: '', deductWeight: '', price: '', unit: 'กก.' }] }));
   const handleRemoveItem = (rowId) => setFormData(prev => ({ ...prev, items: prev.items.filter(item => item.rowId !== rowId) }));
   
   const handleItemChange = (rowId, field, value) => {
@@ -1520,7 +1520,7 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
                  </div>
                  <div className="bg-white px-5 py-2 rounded-xl border border-slate-200 shadow-sm flex items-center gap-3">
                     <span className="text-[14px] font-medium text-slate-500">น้ำหนักบิลรวม:</span>
-                    <span className="text-[18px] font-display font-bold text-slate-800">{(formData.items || []).reduce((sum, i) => sum + (Number(i.quantity)||0), 0).toLocaleString()} <span className="text-[14px] font-medium text-slate-500">กก.</span></span>
+                    <span className="text-[18px] font-display font-bold text-slate-800">{(formData.items || []).reduce((sum, i) => sum + ((Number(i.quantity)||0) - (Number(i.deductWeight)||0)), 0).toLocaleString()} <span className="text-[14px] font-medium text-slate-500">กก.</span></span>
                  </div>
               </div>
 
@@ -1629,6 +1629,8 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
                 <div className="hidden md:flex flex-row gap-3 px-3 pb-2 text-[13px] font-bold text-slate-500 border-b border-slate-100">
                   <div className="flex-[2]">รายการ</div>
                   <div className="flex-[1] text-center">จำนวน(kg)</div>
+                  <div className="flex-[1] text-center">หักน้ำหนัก</div>
+                  <div className="flex-[1] text-center">น้ำหนักสุทธิ</div>
                   <div className="flex-[1] text-right pr-2">ราคาต่อหน่วย</div>
                   <div className="flex-[1] text-center pl-2">รวม</div>
                   <div className="w-[32px]"></div>
@@ -1641,13 +1643,23 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
                     <label className="block md:hidden text-[11px] font-bold text-slate-400 mb-1">รายการ</label>
                     <select disabled={isViewOnly} value={item.productId} onChange={(e) => handleItemChange(item.rowId, 'productId', e.target.value)} className={`w-full h-[40px] px-3 bg-white border border-slate-200 rounded-[12px] text-[14px] outline-none focus:border-sky-500 transition-all disabled:bg-transparent ${dailyItems.length === 0 && !item.productId ? 'text-rose-500' : 'text-slate-700'}`}>
                       {dailyItems.length > 0 ? <option value="">-- เลือกราคารับซื้อวันนี้ --</option> : <option value="">-- ไม่พบการตั้งราคาวันนี้ --</option>}
-                      {dailyItems.map(p => <option key={p.id} value={p.id}>{p.name} ({p.category})</option>)}
-                      {item.productId && !dailyItems.some(p => p.id === item.productId) && <option value={item.productId}>{item.name || item.productId} (ข้อมูลเก่า)</option>}
+                      {dailyItems.slice().sort((a, b) => (a.id || '').localeCompare(b.id || '')).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      {item.productId && !dailyItems.some(p => p.id === item.productId) && <option value={item.productId}>{item.name || 'ข้อมูลเก่า'}</option>}
                     </select>
                   </div>
                   <div className="w-full md:flex-[1]">
                     <label className="block md:hidden text-[11px] font-bold text-slate-400 mb-1">จำนวน(kg)</label>
                     <input disabled={isViewOnly} type="number" value={item.quantity} onChange={(e) => handleItemChange(item.rowId, 'quantity', e.target.value)} className="w-full h-[40px] px-3 bg-white border border-slate-200 rounded-[12px] text-[14px] text-center font-mono-code outline-none focus:border-sky-500 disabled:bg-transparent" placeholder="0" />
+                  </div>
+                  <div className="w-full md:flex-[1]">
+                    <label className="block md:hidden text-[11px] font-bold text-slate-400 mb-1">หักน้ำหนัก</label>
+                    <input disabled={isViewOnly} type="number" value={item.deductWeight || ''} onChange={(e) => handleItemChange(item.rowId, 'deductWeight', e.target.value)} className="w-full h-[40px] px-3 bg-white border border-slate-200 rounded-[12px] text-[14px] text-center font-mono-code outline-none focus:border-sky-500 disabled:bg-transparent" placeholder="0" />
+                  </div>
+                  <div className="w-full md:flex-[1] flex items-center justify-center mt-2 md:mt-0">
+                    <label className="inline-block md:hidden text-[11px] font-bold text-slate-400 mr-2">น้ำหนักสุทธิ</label>
+                    <span className="font-mono-code font-bold text-[15px] text-sky-600">
+                       {((Number(item.quantity) || 0) - (Number(item.deductWeight) || 0)).toLocaleString()}
+                    </span>
                   </div>
                   <div className="w-full md:flex-[1]">
                     <label className="block md:hidden text-[11px] font-bold text-slate-400 mb-1">ราคาต่อหน่วย</label>
@@ -1666,7 +1678,7 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
                   </div>
                   <div className="w-full md:flex-[1] text-right md:text-center mt-2 md:mt-0">
                     <label className="inline-block md:hidden text-[11px] font-bold text-slate-400 mr-2">รวม</label>
-                    <span className="font-mono-code font-bold text-[16px] text-slate-800">{((Number(item.quantity) || 0) * (Number(item.price) || 0)).toLocaleString()}</span>
+                    <span className="font-mono-code font-bold text-[16px] text-slate-800">{(((Number(item.quantity) || 0) - (Number(item.deductWeight) || 0)) * (Number(item.price) || 0)).toLocaleString()}</span>
                   </div>
                   {!isViewOnly && <button tabIndex="-1" onClick={() => handleRemoveItem(item.rowId)} className="absolute -top-2 -right-2 md:static md:w-auto p-1.5 bg-white md:bg-transparent border border-slate-200 md:border-none rounded-full text-slate-300 hover:text-rose-500 shadow-sm md:shadow-none"><Trash2 className="w-4 h-4" /></button>}
                 </div>
