@@ -8,6 +8,7 @@ import {
   ArrowDownCircle, ArrowUpCircle, FileDown, DollarSign,
   LayoutDashboard, LogOut, ChevronLeft, ChevronRight, User, Home, Bell, Phone
 } from 'lucide-react';
+import PublicPriceBoard from './PublicPriceBoard';
 
 // --- Shared Components ---
 
@@ -683,6 +684,11 @@ export default function App() {
     return useMockAPI();
   };
 
+
+  const pathName = decodeURIComponent(window.location.pathname);
+  if (pathName === '/ราคาประจำวัน') {
+    return <PublicPriceBoard dailyPriceData={dailyPriceData} isGlobalFetching={isGlobalFetching} />;
+  }
 
   return (
     <div className="w-full h-screen bg-slate-50 flex relative overflow-hidden text-slate-800 font-sans">
@@ -1777,12 +1783,16 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
   const openModal = (priceEntry = null, viewOnly = false) => {
     setIsViewOnly(viewOnly);
     if (priceEntry) {
-      setFormData(priceEntry);
+      const sortedItems = [...(priceEntry.items || [])].sort((a, b) => (a.id || '').localeCompare(b.id || ''));
+      setFormData({ ...priceEntry, items: sortedItems });
       setEditingId(priceEntry.id);
     } else {
-      const activeProducts = (productData || []).filter(p => p.status === 'Active').map(p => ({
-        id: p.id, name: p.name, category: p.category, unit: p.unit, todayPrice: p.buyPrice || ''
-      }));
+      const activeProducts = (productData || [])
+        .filter(p => p.status === 'Active')
+        .sort((a, b) => (a.id || '').localeCompare(b.id || ''))
+        .map(p => ({
+          id: p.id, name: p.name, category: p.category, unit: p.unit, todayPrice: p.buyPrice || ''
+        }));
       const todayStr = new Date().toISOString().split('T')[0];
       setFormData({ id: 'AUTO', date: todayStr, items: activeProducts, note: '' });
       setEditingId(null);
@@ -1792,10 +1802,13 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
 
   const handleAddItem = (product) => {
     if (!(formData.items || []).find(item => item.id === product.id)) {
-      setFormData(prev => ({
-        ...prev,
-        items: [{ id: product.id, name: product.name, category: product.category, unit: product.unit, todayPrice: product.buyPrice || '' }, ...(prev.items || [])]
-      }));
+      setFormData(prev => {
+        const newItems = [{ id: product.id, name: product.name, category: product.category, unit: product.unit, todayPrice: product.buyPrice || '' }, ...(prev.items || [])];
+        return {
+          ...prev,
+          items: newItems.sort((a, b) => (a.id || '').localeCompare(b.id || ''))
+        };
+      });
     }
   };
 
@@ -1861,9 +1874,14 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
               <h2 className="font-display font-bold text-slate-800 tracking-tight sticky-header-title">ราคารับซื้อประจำวัน</h2>
               <p className="text-slate-500 sticky-header-desc text-[15px]">กำหนดและตรวจสอบราคารับซื้อสินค้าแบบวันต่อวัน</p>
             </div>
-            <button onClick={() => openModal()} className="flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 bg-[#0ea5e9] hover:bg-[#0284c7] text-white px-4 py-2 sm:px-6 sm:py-3 pointer-events-auto">
-              <Plus className="w-5 h-5" /> <span className="hidden sm:inline">ตั้งราคาวันนี้</span>
-            </button>
+            <div className="flex gap-2">
+              <a href="/ราคาประจำวัน" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3 py-2 sm:px-4 sm:py-3 pointer-events-auto" title="เปิดหน้ากระดานราคาสำหรับให้ลูกค้าดู">
+                <LayoutDashboard className="w-5 h-5 text-emerald-500" /> <span className="hidden sm:inline">หน้ากระดานลูกค้า</span>
+              </a>
+              <button onClick={() => openModal()} className="flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 bg-[#0ea5e9] hover:bg-[#0284c7] text-white px-4 py-2 sm:px-6 sm:py-3 pointer-events-auto">
+                <Plus className="w-5 h-5" /> <span className="hidden sm:inline">ตั้งราคาวันนี้</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
