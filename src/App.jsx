@@ -686,7 +686,7 @@ export default function App() {
 
 
   const pathName = decodeURIComponent(window.location.pathname);
-  if (pathName === '/ราคาประจำวัน') {
+  if (pathName === '/daily-price' || pathName === '/ราคาประจำวัน') {
     return <PublicPriceBoard dailyPriceData={dailyPriceData} isGlobalFetching={isGlobalFetching} />;
   }
 
@@ -1875,7 +1875,7 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
               <p className="text-slate-500 sticky-header-desc text-[15px]">กำหนดและตรวจสอบราคารับซื้อสินค้าแบบวันต่อวัน</p>
             </div>
             <div className="flex gap-2">
-              <a href="/ราคาประจำวัน" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3 py-2 sm:px-4 sm:py-3 pointer-events-auto" title="เปิดหน้ากระดานราคาสำหรับให้ลูกค้าดู">
+              <a href="/daily-price" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3 py-2 sm:px-4 sm:py-3 pointer-events-auto" title="เปิดหน้ากระดานราคาสำหรับให้ลูกค้าดู">
                 <LayoutDashboard className="w-5 h-5 text-emerald-500" /> <span className="hidden sm:inline">หน้ากระดานลูกค้า</span>
               </a>
               <button onClick={() => openModal()} className="flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 bg-[#0ea5e9] hover:bg-[#0284c7] text-white px-4 py-2 sm:px-6 sm:py-3 pointer-events-auto">
