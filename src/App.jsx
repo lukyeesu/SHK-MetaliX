@@ -3,14 +3,18 @@ import {
   Users, Lock, PackagePlus, Box, FileText, UserCircle, 
   BarChart3, Settings, Plus, Edit, Trash2, X, Loader2, 
   CheckCircle, AlertCircle, Info, Menu, UploadCloud, Search, Printer,
-  MapPin, Scan, Clock, Tag, CircleDollarSign, Warehouse, AlertTriangle,
+  MapPin, Scan, Camera, Clock, Tag, CircleDollarSign, Warehouse, AlertTriangle,
   Scale, Save, PlusCircle, CalendarClock, Minus, 
   ArrowDownCircle, ArrowUpCircle, FileDown, DollarSign,
   LayoutDashboard, LogOut, ChevronLeft, ChevronRight, User, Home, Bell, Phone
 } from 'lucide-react';
 import PublicPriceBoard from './PublicPriceBoard';
 
+
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyCy3fR2cCaeUhV1DlAx2ZI4nXyvt485BWlZt-TX1FcX8EzZatYk_tNHXKXTuxvV8QI/exec";
+
 // --- Shared Components ---
+
 
 const FullPageLoader = ({ message }) => (
   <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-[9999] flex flex-col items-center justify-center font-body">
@@ -22,7 +26,7 @@ const FullPageLoader = ({ message }) => (
 );
 
 const Toast = ({ toasts, removeToast }) => (
-  <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[200] flex flex-col gap-3 font-body items-center pointer-events-none w-full px-4">
+  <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[99999] flex flex-col gap-3 font-body items-center pointer-events-none w-full px-4">
     {toasts.map(toast => (
       <div key={toast.id} className={`pointer-events-auto flex items-center w-max max-w-full gap-3 px-5 py-4 rounded-[16px] shadow-[0_8px_32px_rgba(0,0,0,0.12)] text-white transform transition-all duration-300
         ${toast.type === 'success' ? 'bg-emerald-500' : toast.type === 'error' ? 'bg-rose-500' : 'bg-slate-800'}
@@ -30,7 +34,7 @@ const Toast = ({ toasts, removeToast }) => (
         {toast.type === 'success' && <CheckCircle className="w-5 h-5 flex-shrink-0" />}
         {toast.type === 'error' && <AlertCircle className="w-5 h-5 flex-shrink-0" />}
         {toast.type === 'info' && <Info className="w-5 h-5 flex-shrink-0" />}
-        <span className="text-[16px] font-normal leading-[1.6] truncate">{toast.message}</span>
+        <span className="text-[16px] font-normal leading-[1.6] break-words flex-1">{toast.message}</span>
         <button onClick={() => removeToast(toast.id)} className="ml-4 opacity-80 hover:opacity-100 transition-opacity p-1 shrink-0">
           <X className="w-4 h-4" />
         </button>
@@ -313,7 +317,6 @@ const generateDocId = (prefix, dataArray, dateStr) => {
   return `${prefixWithDate}${nextRunning}`; 
 };
 
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzvTHxvoyfPAz2eKZy2es-hYSL9Y5n198mNVx3XOJPntCnmC9yHy3LTUOm6GsS-_m7e/exec";
 
 // --- Main Application ---
 
@@ -634,6 +637,34 @@ export default function App() {
     { id: 'reports', label: 'รายงาน', icon: BarChart3 },
     { id: 'settings', label: 'ตั้งค่า', icon: Settings },
   ];
+  const executePrintBill = (bill) => {
+    addToast('กำลังเตรียมพิมพ์ใบเสร็จ...', 'success');
+    try {
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        addToast('เบราว์เซอร์บล็อกหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
+        return;
+      }
+      const customer = (customerData || []).find(c => c.id === bill.customerId);
+      let html = '';
+      try {
+        html = generateA5ReceiptHtml(bill, customer, null);
+      } catch (genError) {
+        console.error('Error generating HTML:', genError);
+        addToast('เกิดข้อผิดพลาดในการสร้างแบบฟอร์มใบเสร็จ', 'error');
+        printWindow.close();
+        return;
+      }
+      printWindow.document.write(html);
+      printWindow.document.close();
+      setTimeout(() => { 
+        try { printWindow.print(); } catch (printError) { console.error(printError); }
+      }, 800); 
+    } catch (err) {
+      addToast('ระบบปริ้นมีปัญหา: ' + err.message, 'error');
+    }
+  };
+
 
 
   const mobileNavItems = menus.filter(item => ['daily_prices', 'customers', 'billing', 'lock'].includes(item.id));
@@ -668,17 +699,28 @@ export default function App() {
     };
 
     if (GOOGLE_SCRIPT_URL && GOOGLE_SCRIPT_URL.startsWith('http')) {
-      try {
-        const cleanUrl = GOOGLE_SCRIPT_URL.trim();
-        const response = await fetch(cleanUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action, sheetName, payload }),
-        });
-        if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
-        return await response.json();
-      } catch (error) {
-        return useMockAPI();
+      let retries = 3;
+      while (retries > 0) {
+        try {
+          const cleanUrl = GOOGLE_SCRIPT_URL.trim();
+          const response = await fetch(cleanUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action, sheetName, payload }),
+          });
+          if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+          return await response.json();
+        } catch (error) {
+          retries--;
+          console.warn(`API attempt failed. Retries left: ${retries}`, error);
+          if (retries === 0) {
+            console.error('requestAPI final fetch error:', error);
+            // หากเชื่อมต่อ API จริงล้มเหลว ให้คืนค่าเป็น Error กลับไปเลย เพื่อไม่ให้ระบบดึงข้อมูลว่างเปล่าจาก Mock มาทับของเดิม
+            return { status: 'error', message: 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้ (Network/CORS Error)' };
+          }
+          // Wait 1.5 seconds before retrying
+          await new Promise(resolve => setTimeout(resolve, 1500));
+        }
       }
     } 
     return useMockAPI();
@@ -874,11 +916,13 @@ export default function App() {
             <DailyPriceModule 
               setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
               dailyPriceData={dailyPriceData} setDailyPriceData={setDailyPriceData} productData={productData} isGlobalFetching={isGlobalFetching}
+              reloadAllData={loadAllData}
             />
           ) : activeMenu === 'customers' ? (
             <CustomerModule 
               setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
               customerData={customerData} setCustomerData={setCustomerData} isGlobalFetching={isGlobalFetching}
+              reloadAllData={loadAllData}
             />
           ) : activeMenu === 'lock' ? (
             <LockWeightModule 
@@ -900,7 +944,7 @@ export default function App() {
             <BillingModule 
               setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
               billingData={billingData} setBillingData={setBillingData} customerData={customerData} productData={productData} 
-              dailyPriceData={dailyPriceData} stockData={stockData} setStockData={setStockData} lockData={lockData} openBillModal={openBillModal} isGlobalFetching={isGlobalFetching} reloadAllData={loadAllData}
+              dailyPriceData={dailyPriceData} stockData={stockData} setStockData={setStockData} lockData={lockData} openBillModal={openBillModal} isGlobalFetching={isGlobalFetching} reloadAllData={loadAllData} executePrintBill={executePrintBill}
             />
           ) : (
             <div className="p-4 md:p-8 h-full">
@@ -1291,6 +1335,45 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const handlePrint = () => {
+    console.log('=== PRINT BUTTON CLICKED ===');
+    addToast('กำลังเตรียมพิมพ์ใบเสร็จ...', 'success');
+    try {
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        addToast('เบราว์เซอร์บล็อกหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
+        return;
+      }
+
+      const customer = (customerData || []).find(c => c.id === formData.customerId);
+      
+      // ดัก Error ตอนสร้าง HTML
+      let html = '';
+      try {
+        html = generateA5ReceiptHtml(formData, customer, null);
+      } catch (genError) {
+        console.error('Error generating HTML:', genError);
+        addToast('เกิดข้อผิดพลาดในการสร้างแบบฟอร์มใบเสร็จ', 'error');
+        printWindow.close();
+        return;
+      }
+
+      printWindow.document.write(html);
+      printWindow.document.close();
+      
+      setTimeout(() => { 
+        try {
+          printWindow.print(); 
+        } catch (printError) {
+          console.error('Error executing print:', printError);
+        }
+      }, 800); 
+    } catch (err) {
+      console.error('handlePrint error:', err);
+      addToast('ระบบปริ้นมีปัญหา: ' + err.message, 'error');
+    }
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     if (!formData.customerName && !formData.customerId) return addToast('กรุณาระบุชื่อลูกค้า', 'error');
@@ -1365,7 +1448,10 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
       addToast(editingId ? 'อัปเดตบิลสำเร็จ' : 'สร้างบิลและหักโควตาอัตโนมัติสำเร็จ', 'success');
       setIsLoading(false);
       onClose();
-      reloadAllData(); 
+      // หน่วงเวลาให้ Google Script พักก่อนดึงข้อมูลใหม่ ป้องกัน Rate Limit (CORS Error)
+      setTimeout(() => {
+        reloadAllData(); 
+      }, 2000);
     } else {
       setIsLoading(false);
     }
@@ -1705,9 +1791,14 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
           </div>
         </div>
 
-        <div className="px-6 py-4 bg-white border-t border-slate-100 flex justify-end gap-3 shrink-0">
-          <button onClick={onClose} className="h-[48px] px-8 text-[15px] font-medium text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors active:scale-95">{isViewOnly ? 'ปิด' : 'ยกเลิก'}</button>
-          {!isViewOnly && <button onClick={handleSave} className="h-[48px] px-8 text-[15px] font-medium text-white bg-sky-500 rounded-xl hover:bg-sky-600 transition-colors active:scale-95 flex items-center gap-2 shadow-[0_4px_12px_rgba(14,165,233,0.25)]"><CheckCircle className="w-5 h-5" /> บันทึกรายการ</button>}
+        <div className="px-6 py-4 bg-white border-t border-slate-100 flex justify-between gap-3 shrink-0">
+          <div className="flex gap-3">
+             {isViewOnly && <button type="button" onClick={handlePrint} className="h-[48px] px-8 text-[15px] font-medium text-white bg-sky-500 rounded-xl hover:bg-sky-600 transition-colors active:scale-95 flex items-center gap-2 shadow-[0_4px_12px_rgba(14,165,233,0.25)]"><Printer className="w-5 h-5" /> พิมพ์ใบเสร็จ</button>}
+          </div>
+          <div className="flex gap-3">
+            <button onClick={onClose} className="h-[48px] px-8 text-[15px] font-medium text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors active:scale-95">{isViewOnly ? 'ปิด' : 'ยกเลิก'}</button>
+            {!isViewOnly && <button onClick={handleSave} className="h-[48px] px-8 text-[15px] font-medium text-white bg-sky-500 rounded-xl hover:bg-sky-600 transition-colors active:scale-95 flex items-center gap-2 shadow-[0_4px_12px_rgba(14,165,233,0.25)]"><CheckCircle className="w-5 h-5" /> บันทึกรายการ</button>}
+          </div>
         </div>
       </div>
     </div>
@@ -1717,7 +1808,7 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
 // ==========================================
 // 1. DAILY PRICE MODULE (ราคารับซื้อประจำวัน)
 // ==========================================
-function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, dailyPriceData, setDailyPriceData, productData, isGlobalFetching }) {
+function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, dailyPriceData, setDailyPriceData, productData, isGlobalFetching, reloadAllData }) {
   const prices = dailyPriceData || []; 
   const [isFetchingTable, setIsFetchingTable] = useState(dailyPriceData === null); 
   const [visibleCount, setVisibleCount] = useState(15);
@@ -2884,7 +2975,7 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
 // ==========================================
 // 3. CUSTOMER MODULE (ระบบลูกค้า)
 // ==========================================
-function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, customerData, setCustomerData, isGlobalFetching }) {
+function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, customerData, setCustomerData, isGlobalFetching, reloadAllData }) {
   const customers = customerData || []; 
   const [isFetchingTable, setIsFetchingTable] = useState(customerData === null); 
   const [visibleCount, setVisibleCount] = useState(15);
@@ -2903,9 +2994,93 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
     email: '', 
     address: '',
     bankName: '',
-    bankAccount: '' 
+    bankAccount: '',
+    idCardImageUrl: ''
   });
   const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, id: null });
+
+  // Camera States
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraStream, setCameraStream] = useState(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [isImageFullscreen, setIsImageFullscreen] = useState(false);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const frameRef = useRef(null);
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 4096 }, height: { ideal: 2160 } }
+      });
+      setCameraStream(stream);
+      setIsCameraOpen(true);
+    } catch (err) {
+      addToast('ไม่สามารถเปิดกล้องได้: ' + err.message, 'error');
+    }
+  };
+
+  useEffect(() => {
+    if (isCameraOpen && videoRef.current && cameraStream) {
+      videoRef.current.srcObject = cameraStream;
+    }
+  }, [isCameraOpen, cameraStream]);
+
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+    }
+    setCameraStream(null);
+    setIsCameraOpen(false);
+  };
+  const takePhotoAndUpload = async () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const frame = frameRef.current;
+    
+    if (!video || !canvas || !frame) return;
+    
+    const ctx = canvas.getContext('2d');
+    
+    const videoRect = video.getBoundingClientRect();
+    const frameRect = frame.getBoundingClientRect();
+    
+    const scale = Math.max(videoRect.width / video.videoWidth, videoRect.height / video.videoHeight);
+    
+    const displayedVideoWidth = video.videoWidth * scale;
+    const displayedVideoHeight = video.videoHeight * scale;
+    
+    const offsetX = (displayedVideoWidth - videoRect.width) / 2;
+    const offsetY = (displayedVideoHeight - videoRect.height) / 2;
+    
+    const frameLeft = frameRect.left - videoRect.left;
+    const frameTop = frameRect.top - videoRect.top;
+    
+    let cropStartX = (frameLeft + offsetX) / scale;
+    let cropStartY = (frameTop + offsetY) / scale;
+    let cropWidth = frameRect.width / scale;
+    let cropHeight = frameRect.height / scale;
+    
+    // ชดเชยการครอปสำหรับแนวนอน (Landscape) เพื่อไม่ให้กินเข้ามาในรูป
+    const isLandscape = window.innerWidth > window.innerHeight;
+    if (isLandscape) {
+       const paddingX = cropWidth * 0.05; // เพิ่มขอบ 5%
+       const paddingY = cropHeight * 0.05;
+       cropStartX = Math.max(0, cropStartX - paddingX / 2);
+       cropStartY = Math.max(0, cropStartY - paddingY / 2);
+       cropWidth = Math.min(video.videoWidth - cropStartX, cropWidth + paddingX);
+       cropHeight = Math.min(video.videoHeight - cropStartY, cropHeight + paddingY);
+    }
+
+    canvas.width = cropWidth;
+    canvas.height = cropHeight;
+    ctx.drawImage(video, cropStartX, cropStartY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+    
+    const base64Image = canvas.toDataURL('image/jpeg', 0.9);
+    stopCamera();
+    setFormData(prev => ({ ...prev, idCardImageUrl: base64Image }));
+    addToast('ถ่ายรูปสำเร็จ (รูปจะถูกอัปโหลดเมื่อกดบันทึกข้อมูล)', 'success');
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [isViewOnly, setIsViewOnly] = useState(false); 
   const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'desc' }); 
@@ -2977,7 +3152,8 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
         email: '', 
         address: '',
         bankName: '',
-        bankAccount: '' 
+        bankAccount: '',
+        idCardImageUrl: ''
       });
       setEditingId(null);
     }
@@ -2986,9 +3162,10 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
 
   const handleSave = async (e) => {
     e.preventDefault();
-    setLoadingMsg('กำลังบันทึกข้อมูล...');
-    setLoadingMsg('กำลังบันทึกข้อมูล...');
     setIsLoading(true);
+    setLoadingMsg('กำลังบันทึกข้อมูล...');
+    
+    // ส่งข้อมูลไปเซฟเลย ถ้ามีรูปภาพ Base64 อยู่ใน idCardImageUrl หลังบ้านจะเอาไปอัปโหลดพร้อมตั้งชื่อให้ใหม่
     const payload = { ...formData, _editingId: editingId };
     const response = await requestAPI('SAVE_DATA', 'Customers', payload);
     if (response.status === 'success') {
@@ -2999,6 +3176,7 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
       else loadData();
     } else {
       setIsLoading(false);
+      addToast('เกิดข้อผิดพลาด: ' + (response.message || 'ไม่ทราบสาเหตุ'), 'error');
     }
   };
 
@@ -3199,7 +3377,7 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-4 mb-5">
                   <div className="flex items-center gap-2 text-sky-600"><UserCircle className="w-5 h-5" /><h4 className="font-bold text-[16px]">ข้อมูลส่วนตัว</h4></div>
                   <div className="flex items-center gap-3">
-                    {!isViewOnly && <button className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-600 text-[13px] font-medium border border-indigo-100 hover:bg-indigo-100 transition-colors"><Scan className="w-4 h-4" /> สแกนจากกล้อง (OCR)</button>}
+                    {!isViewOnly && <button type="button" onClick={startCamera} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-600 text-[13px] font-medium border border-indigo-100 hover:bg-indigo-100 transition-colors active:scale-95"><Camera className="w-4 h-4" /> ถ่ายรูปบัตรประชาชน</button>}
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-50 text-slate-500 text-[13px] border border-slate-100"><Clock className="w-4 h-4" /> ลงทะเบียน: {new Date().toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' })} น.</div>
                   </div>
                 </div>
@@ -3234,6 +3412,20 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
                     <label className="text-[13px] font-medium text-slate-600">หมายเลขบัตรประชาชน / เลขผู้เสียภาษี</label>
                     <input disabled={isViewOnly} value={formData.taxId || ''} onChange={(e)=>setFormData({...formData, taxId: e.target.value})} placeholder="1-xxxx-xxxxx-xx-x" className="w-full h-[44px] px-4 bg-white border border-slate-200 rounded-[12px] font-mono-code text-[14px] text-slate-700 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed" />
                   </div>
+                  {formData.idCardImageUrl && (
+                    <div className="space-y-1.5 md:col-span-4 mt-2">
+                      <label className="text-[13px] font-medium text-slate-600">รูปภาพบัตรประชาชน</label>
+                      <div 
+                        className="w-full max-w-sm rounded-xl overflow-hidden border border-slate-200 cursor-pointer hover:opacity-90 transition-opacity relative group"
+                        onClick={() => setIsImageFullscreen(true)}
+                      >
+                        <img src={formData.idCardImageUrl} alt="ID Card" className="w-full h-auto object-cover" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <span className="text-white text-sm font-medium flex items-center gap-2"><Scan className="w-4 h-4" /> ดูรูปเต็ม</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="bg-white border border-slate-200/60 rounded-[20px] p-6 shadow-sm">
@@ -3286,6 +3478,47 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
           </div>
         </div>
       )}
+      {isCameraOpen && (
+        <div className="fixed inset-0 bg-black z-[200] flex flex-col justify-center items-center">
+          <video ref={videoRef} autoPlay playsInline className="absolute w-full h-full object-cover" />
+          <canvas ref={canvasRef} className="hidden" />
+          
+          <div className="absolute inset-0 z-10 pointer-events-none flex items-center justify-center">
+            <div ref={frameRef} style={{ width: '90vw', maxWidth: 'calc(60vh * 1.586)', aspectRatio: '1.586 / 1' }} className="border-4 border-emerald-500 rounded-xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.6)]">
+               <div className="absolute bottom-[calc(100%+12px)] left-1/2 -translate-x-1/2 bg-black/90 backdrop-blur-sm px-4 py-1.5 border border-emerald-500/50 rounded-full text-center whitespace-nowrap flex items-center gap-2 shadow-lg">
+                  <span className="text-emerald-400 font-bold text-[14px]">วางบัตรให้พอดีกรอบ</span>
+                  <span className="text-amber-300 font-medium text-[12px] border-l border-slate-600 pl-2">⚠️ ระวังแสงสะท้อน</span>
+               </div>
+            </div>
+          </div>
+          
+          <div className="absolute z-20 flex items-center gap-6 bottom-10 left-1/2 -translate-x-1/2 flex-row landscape:bottom-auto landscape:top-1/2 landscape:-translate-y-1/2 landscape:left-auto landscape:right-10 landscape:flex-col landscape:translate-x-0">
+            <button onClick={stopCamera} className="w-14 h-14 bg-white/20 backdrop-blur rounded-full flex items-center justify-center text-white hover:bg-white/30 transition-colors"><X className="w-6 h-6" /></button>
+            <button onClick={takePhotoAndUpload} className="w-20 h-20 bg-white rounded-full flex items-center justify-center border-4 border-slate-300 hover:scale-95 transition-transform">
+               <div className="w-16 h-16 bg-white rounded-full border border-slate-200 shadow-inner"></div>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isImageFullscreen && formData.idCardImageUrl && (
+        <div className="fixed inset-0 bg-black/90 z-[300] flex flex-col justify-center items-center p-4 animate-in fade-in duration-200">
+          <button 
+            onClick={() => setIsImageFullscreen(false)} 
+            className="absolute top-6 right-6 w-12 h-12 bg-white/10 backdrop-blur rounded-full flex items-center justify-center text-white hover:bg-white/20 transition-colors z-10"
+          >
+            <X className="w-6 h-6" />
+          </button>
+          <img 
+            src={formData.idCardImageUrl} 
+            alt="Full ID Card" 
+            className="w-full h-auto max-w-5xl max-h-[90vh] object-contain rounded-lg shadow-2xl" 
+          />
+        </div>
+      )}
+
+
+
       <ConfirmAlert isOpen={confirmDelete.isOpen} onCancel={() => setConfirmDelete({ isOpen: false, id: null })} onConfirm={handleDelete} title="ยืนยันลบ" text="ต้องการลบรายการนี้ใช่ไหม" />
     </div>
   );
@@ -4223,7 +4456,7 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
 // ==========================================
 // 6. BILLING MODULE (ออกบิลซื้อ/ขาย)
 // ==========================================
-function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, billingData, setBillingData, customerData, productData, dailyPriceData, stockData, setStockData, lockData, openBillModal, isGlobalFetching, reloadAllData }) {
+function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, billingData, setBillingData, customerData, productData, dailyPriceData, stockData, setStockData, lockData, openBillModal, isGlobalFetching, reloadAllData, executePrintBill }) {
   const bills = billingData || []; 
   const [isFetchingTable, setIsFetchingTable] = useState(billingData === null); 
   const [visibleCount, setVisibleCount] = useState(15);
@@ -4316,6 +4549,7 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
       setIsLoading(false);
     }
   };
+
 
   const formatDateTh = (dateStr) => {
     if (!dateStr) return '-';
@@ -4434,9 +4668,10 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
                         {Number(b.grandTotal).toLocaleString()}
                       </td>
                       <td className="px-6 py-4 flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                        <button className="p-2 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-[12px] transition-colors" title="พิมพ์บิล"><Printer className="w-[18px] h-[18px]" /></button>
-                        <button onClick={() => openBillModal && openBillModal(b, false)} className="p-2 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-[12px] transition-colors" title="แก้ไข"><Edit className="w-[18px] h-[18px]" /></button>
-                        <button onClick={() => {
+                        <button onClick={(e) => { e.stopPropagation(); executePrintBill && executePrintBill(b); }} className="p-2 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-[12px] transition-colors" title="พิมพ์บิล"><Printer className="w-[18px] h-[18px]" /></button>
+                        <button onClick={(e) => { e.stopPropagation(); openBillModal && openBillModal(b, false); }} className="p-2 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-[12px] transition-colors" title="แก้ไข"><Edit className="w-[18px] h-[18px]" /></button>
+                        <button onClick={(e) => {
+                            e.stopPropagation();
                             const data = [];
                             const isPositiveBill = b.type === 'BUY';
                             const totalW = (b.items || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
@@ -4542,9 +4777,9 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
             }}
             renderActions={(b) => (
               <>
-                <button className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-xl transition-colors font-medium text-xs"><Printer className="w-4 h-4" /> พิมพ์</button>
-                <button onClick={() => openBillModal && openBillModal(b, true)} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs"><Info className="w-4 h-4" /> ดูบิล</button>
-                <button onClick={() => setConfirmDelete({ isOpen: true, id: b.id })} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-xs"><Trash2 className="w-4 h-4" /> ลบ</button>
+                <button onClick={(e) => { e.stopPropagation(); executePrintBill && executePrintBill(b); }} className="flex-1 flex items-center justify-center gap-2 py-2 text-sky-500 hover:text-sky-600 bg-sky-50 hover:bg-sky-100 rounded-xl transition-colors font-bold text-xs"><Printer className="w-4 h-4" /> พิมพ์</button>
+                <button onClick={(e) => { e.stopPropagation(); openBillModal && openBillModal(b, false); }} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs"><Edit className="w-4 h-4" /> แก้ไข</button>
+                <button onClick={(e) => { e.stopPropagation(); setConfirmDelete({ isOpen: true, id: b.id }); }} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-xs"><Trash2 className="w-4 h-4" /> ลบ</button>
               </>
             )}
           />
@@ -4557,3 +4792,197 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
     </div>
   );
 }
+
+export const generateA5ReceiptHtml = (bill, customer, companyInfo) => {
+  if (!bill) return '';
+
+  const defaultCompanyInfo = {
+    name: 'SHK METAL',
+    address: 'ที่อยู่ร้าน SHK METAL (ตั้งค่าบริษัท)',
+    taxId: '-',
+    phone: '-'
+  };
+
+  const comp = companyInfo || defaultCompanyInfo;
+  const cust = customer || {};
+
+  const isBuy = bill.type === 'BUY';
+  const isSell = bill.type === 'SELL';
+  const billTitle = isBuy ? 'ใบรับซื้อสินค้า' : isSell ? 'ใบเสร็จรับเงิน/ใบกำกับภาษี' : 'ใบเสร็จรับเงิน';
+
+  const formatNumber = (num) => Number(num || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  
+  const getThaiBahtText = (amount) => {
+    if (!amount || amount === 0) return 'ศูนย์บาทถ้วน';
+    return `(${formatNumber(amount)} บาทถ้วน)`; 
+  };
+
+  const dateStr = new Date(bill.createdAt || Date.now()).toLocaleDateString('th-TH');
+
+  const allItems = bill.items || [];
+  const chunkSize = 5;
+  const chunks = [];
+  for (let i = 0; i < allItems.length; i += chunkSize) {
+    chunks.push(allItems.slice(i, i + chunkSize));
+  }
+  if (chunks.length === 0) chunks.push([]);
+
+  const idCardHtml = cust.idCardImageUrl && cust.idCardImageUrl !== '-' 
+    ? `<div class="id-card-image-wrapper"><img src="${cust.idCardImageUrl}" alt="ID Card" class="id-card-image" /></div>`
+    : `<div class="id-card-image-wrapper" style="display: flex; align-items: center; justify-content: center; border: 1px dashed #94a3b8; color: #94a3b8; font-size: 11pt;">รูปบัตรประชาชน</div>`;
+
+  const headerHtml = `
+            <div class="receipt-header">
+                <div class="receipt-header-left">
+                    <h1 class="company-name">${comp.name}</h1>
+                    <p class="company-details">${comp.address}<br/>เลขที่ภาษี: ${comp.taxId} &nbsp;&nbsp; โทร: ${comp.phone}</p>
+                    <div class="customer-info">
+                        <div class="info-row"><span class="info-label">ลูกค้า:</span><span class="info-value">${cust.name || bill.customerName || '-'}</span></div>
+                        <div class="info-row"><span class="info-label">ที่อยู่:</span><span class="info-value">${cust.address || '-'}</span></div>
+                        <div class="info-row"><span class="info-label">เลขที่ภาษี:</span><span class="info-value">${cust.taxId || '-'}</span></div>
+                        <div class="info-row"><span class="info-label">โทร:</span><span class="info-value">${cust.phone || '-'}</span></div>
+                    </div>
+                    <div class="doc-info-box">
+                        <div class="info-row"><span class="info-label">เลขที่:</span><span class="info-value font-bold">${bill.id}</span></div>
+                        <div class="info-row"><span class="info-label">วันที่ออก:</span><span class="info-value">${dateStr}</span></div>
+                    </div>
+                </div>
+                <div class="receipt-header-right">
+                    <div class="receipt-title-box">
+                        <span class="receipt-original-tag">(ต้นฉบับ)</span>
+                        <h2 class="receipt-title">${billTitle}</h2>
+                    </div>
+                    ${idCardHtml}
+                </div>
+            </div>
+  `;
+
+  const pagesHtml = chunks.map((chunk, pageIndex) => {
+    const isLastPage = pageIndex === chunks.length - 1;
+    const currentHeaderHtml = pageIndex === 0 ? headerHtml : '';
+    let itemsHtml = chunk.map((item, localIndex) => {
+      const globalIndex = (pageIndex * chunkSize) + localIndex;
+      const qty = Number(item.quantity) || 0;
+      const price = Number(item.price) || 0;
+      const deduct = Number(item.deductWeight) || 0;
+      const finalQty = qty - deduct;
+      const amount = finalQty * price;
+      
+      return `
+        <tr>
+          <td class="text-center" style="padding: 2px 4px; border-bottom: 1px dotted #e2e8f0;">${globalIndex + 1}</td>
+          <td style="padding: 2px 4px; border-bottom: 1px dotted #e2e8f0;">${item.name || 'สินค้าทั่วไป'}</td>
+          <td class="text-center" style="padding: 2px 4px; border-bottom: 1px dotted #e2e8f0;">${formatNumber(qty)} ${item.unit || 'กก.'}</td>
+          <td class="text-center" style="padding: 2px 4px; border-bottom: 1px dotted #e2e8f0;">${formatNumber(price)}</td>
+          <td class="text-center" style="padding: 2px 4px; border-bottom: 1px dotted #e2e8f0;">${deduct > 0 ? formatNumber(deduct) : '-'}</td>
+          <td class="text-right font-bold" style="padding: 2px 4px; border-bottom: 1px dotted #e2e8f0;">${formatNumber(amount)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const footerHtml = isLastPage ? `
+            <div class="receipt-footer">
+                <div class="total-amount-box">
+                    <span class="total-amount-label">จำนวนเงินทั้งสิ้น</span>
+                    <span class="total-amount-value">${formatNumber(bill.grandTotal)} บาท</span>
+                </div>
+            </div>
+            <div class="signatures">
+                <div class="signature-box">
+                    <div class="signature-name">(...................................................)</div>
+                    <div class="signature-role">ผู้รับเงิน / ผู้รับบริการ</div>
+                </div>
+                <div class="signature-box">
+                    <div class="signature-name">(...................................................)</div>
+                    <div class="signature-role">เจ้าหน้าที่ / ผู้มีอำนาจลงนาม</div>
+                </div>
+            </div>
+    ` : '';
+
+    return `
+        <div class="receipt-container">
+            ${currentHeaderHtml}
+            <div class="receipt-table-section">
+                <table class="receipt-table">
+                    <thead>
+                        <tr>
+                            <th class="text-center" style="width: 40px;">ลำดับ</th>
+                            <th>รายการสินค้า / บริการ</th>
+                            <th class="text-center" style="width: 100px;">จำนวน</th>
+                            <th class="text-center" style="width: 100px;">ราคาต่อหน่วย</th>
+                            <th class="text-center" style="width: 100px;">หัก นน.</th>
+                            <th class="text-right" style="width: 120px;">จำนวนเงิน</th>
+                        </tr>
+                    </thead>
+                    <tbody>${itemsHtml}</tbody>
+                </table>
+            </div>
+            ${footerHtml}
+        </div>
+    `;
+  }).join('');
+
+  return `
+    <!DOCTYPE html>
+    <html lang="th">
+    <head>
+        <meta charset="UTF-8">
+        <title>พิมพ์ใบเสร็จ - ${bill.id}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A5 landscape; }
+            body { 
+                font-family: 'Inter', sans-serif;
+                margin: 0;
+                padding: 0;
+                background: white;
+                color: #1e293b;
+                -webkit-print-color-adjust: exact; 
+                print-color-adjust: exact;
+            }
+            .receipt-container { 
+                width: 100%; 
+                padding: 0; 
+                box-sizing: border-box; 
+                display: flex; 
+                flex-direction: column; 
+                page-break-after: always;
+            }
+            .receipt-container:last-child {
+                page-break-after: auto;
+            }
+            .receipt-header { display: flex; justify-content: space-between; margin-bottom: 1mm; }
+            .receipt-header-left { flex: 1; font-size: 9pt; padding-right: 5mm; }
+            .company-name { font-size: 14pt; font-weight: 700; margin: 0; }
+            .company-details { color: #64748b; margin: 0 0 1mm 0; line-height: 1.1; }
+            .customer-info { margin-bottom: 1mm; line-height: 1.1; }
+            .info-row { display: flex; margin-bottom: 0.5mm; }
+            .info-label { width: 20mm; font-weight: 600; }
+            .info-value { flex: 1; }
+            .doc-info-box { background-color: #f0f9ff; border: 1px solid #bae6fd; border-radius: 4px; padding: 2mm; display: inline-block; min-width: 50mm; line-height: 1.1; }
+            .receipt-header-right { width: 85.6mm; display: flex; flex-direction: column; align-items: flex-end; }
+            .receipt-title-box { text-align: right; margin-bottom: 1mm; }
+            .receipt-original-tag { font-size: 9pt; color: #64748b; }
+            .receipt-title { font-size: 14pt; font-weight: 700; color: #0284c7; margin: 0; }
+            .id-card-image-wrapper { width: 85.6mm; height: 53.98mm; background: #f8fafc; border-radius: 4px; overflow: hidden; border: 1px solid #e2e8f0; margin-right: 1mm; }
+            .id-card-image { width: 100%; height: 100%; object-fit: contain; }
+            .receipt-table-section { flex: 1; margin-bottom: 1mm; }
+            .receipt-table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+            .receipt-table th { background-color: #f0f9ff; color: #0284c7; padding: 2px 4px; border-bottom: 1px solid #bae6fd; border-top: 1px solid #bae6fd; text-align: left;}
+            .receipt-footer { display: flex; justify-content: flex-end; align-items: center; padding: 1mm 0; margin-bottom: 1mm; }
+            .total-amount-box { display: flex; background-color: #f0f9ff; border: 1px solid #bae6fd; border-radius: 4px; padding: 1mm 3mm; gap: 3mm; align-items: center; }
+            .total-amount-label { font-weight: 700; font-size: 9pt; }
+            .total-amount-value { font-size: 11pt; font-weight: 700; color: #0284c7; }
+            .signatures { display: flex; justify-content: space-between; padding: 0 10mm; margin-top: 7mm; }
+            .signature-box { text-align: center; font-size: 10pt; color: #475569; display: flex; flex-direction: column; align-items: center; }
+            .text-center { text-align: center !important; }
+            .text-right { text-align: right !important; }
+            .font-bold { font-weight: 700; }
+        </style>
+    </head>
+    <body>
+        ${pagesHtml}
+    </body>
+    </html>
+  `;
+};
