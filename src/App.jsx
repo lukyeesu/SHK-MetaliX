@@ -999,11 +999,13 @@ export default function App() {
             <ProductModule 
               setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
               productData={productData} setProductData={setProductData} isGlobalFetching={isGlobalFetching}
+              reloadAllData={loadAllData}
             />
           ) : activeMenu === 'stock' ? (
             <StockModule 
               setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
               stockData={stockData} setStockData={setStockData} productData={productData} billingData={billingData} lockData={lockData} isGlobalFetching={isGlobalFetching}
+              reloadAllData={loadAllData}
             />
           ) : activeMenu === 'billing' ? (
             <BillingModule 
@@ -1554,13 +1556,13 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
         }
       }
 
-      addToast(editingId ? 'อัปเดตบิลสำเร็จ' : 'สร้างบิลและหักโควตาอัตโนมัติสำเร็จ', 'success');
-      setIsLoading(false);
-      onClose();
-      // หน่วงเวลาให้ Google Script พักก่อนดึงข้อมูลใหม่ ป้องกัน Rate Limit (CORS Error)
-      setTimeout(() => {
-        reloadAllData(); 
-      }, 2000);
+      // หน่วงเวลาให้ Google Script อัปเดต (Eventual Consistency)
+      setTimeout(async () => {
+        if (reloadAllData) await reloadAllData(); 
+        addToast(editingId ? 'อัปเดตบิลสำเร็จ' : 'สร้างบิลและหักโควตาอัตโนมัติสำเร็จ', 'success');
+        setIsLoading(false);
+        onClose();
+      }, 1000);
     } else {
       setIsLoading(false);
     }
@@ -2013,11 +2015,15 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
 
     const response = await requestAPI('SAVE_DATA', 'DailyPrices', finalPayload);
     if (response.status === 'success') {
-      addToast(editingId ? 'อัปเดตราคาสำเร็จ' : 'บันทึกราคารายวันสำเร็จ', 'success');
-      loadData();
-      setIsModalOpen(false);
+      setTimeout(async () => {
+        if (reloadAllData) await reloadAllData(); else loadData();
+        addToast(editingId ? 'อัปเดตราคาสำเร็จ' : 'บันทึกราคารายวันสำเร็จ', 'success');
+        setIsLoading(false);
+        setIsModalOpen(false);
+      }, 1500);
+    } else {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const handleDelete = async () => {
@@ -2027,10 +2033,14 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
     setIsLoading(true);
     const response = await requestAPI('DELETE_DATA', 'DailyPrices', { id: idToDelete });
     if (response.status === 'success') {
-      addToast('ลบประวัติราคาเรียบร้อย', 'success');
-      loadData();
+      setTimeout(async () => {
+        if (reloadAllData) await reloadAllData(); else loadData();
+        addToast('ลบประวัติราคาเรียบร้อย', 'success');
+        setIsLoading(false);
+      }, 1500);
+    } else {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
 
@@ -2482,11 +2492,12 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
            }
         }
       }
-      addToast(editingId ? 'อัปเดตข้อมูลโควตาสำเร็จ' : 'เพิ่มข้อมูลโควตาและดึงยอดติดลบสำเร็จ', 'success');
-      setIsLoading(false);
-      setIsModalOpen(false);
-      if (reloadAllData) await reloadAllData();
-      else loadData();
+      setTimeout(async () => {
+        if (reloadAllData) await reloadAllData(); else loadData();
+        addToast(editingId ? 'อัปเดตข้อมูลโควตาสำเร็จ' : 'เพิ่มข้อมูลโควตาและดึงยอดติดลบสำเร็จ', 'success');
+        setIsLoading(false);
+        setIsModalOpen(false);
+      }, 1500);
     } else {
       setIsLoading(false);
     }
@@ -2524,10 +2535,11 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
         await requestAPI('SAVE_DATA', 'Stock', { ...s, quotaId: '' });
       }
 
-      addToast('ลบประวัติโควตาเรียบร้อย', 'success');
-      setIsLoading(false);
-      if (reloadAllData) await reloadAllData();
-      else loadData();
+      setTimeout(async () => {
+        if (reloadAllData) await reloadAllData(); else loadData();
+        addToast('ลบประวัติโควตาเรียบร้อย', 'success');
+        setIsLoading(false);
+      }, 1500);
     } else {
       setIsLoading(false);
     }
@@ -3275,11 +3287,12 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
     const payload = { ...formData, _editingId: editingId };
     const response = await requestAPI('SAVE_DATA', 'Customers', payload);
     if (response.status === 'success') {
-      addToast(editingId ? 'อัปเดตข้อมูลสำเร็จ' : 'เพิ่มข้อมูลใหม่สำเร็จ', 'success');
-      setIsLoading(false);
-      setIsModalOpen(false);
-      if (reloadAllData) await reloadAllData();
-      else loadData();
+      setTimeout(async () => {
+        if (reloadAllData) await reloadAllData(); else loadData();
+        addToast(editingId ? 'อัปเดตข้อมูลสำเร็จ' : 'เพิ่มข้อมูลใหม่สำเร็จ', 'success');
+        setIsLoading(false);
+        setIsModalOpen(false);
+      }, 1500);
     } else {
       setIsLoading(false);
       addToast('เกิดข้อผิดพลาด: ' + (response.message || 'ไม่ทราบสาเหตุ'), 'error');
@@ -3293,10 +3306,7 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
     setIsLoading(true);
     const response = await requestAPI('DELETE_DATA', 'Customers', { id: idToDelete });
     if (response.status === 'success') {
-      addToast('ลบข้อมูลเรียบร้อยแล้ว', 'success');
-      setIsLoading(false);
-      if (reloadAllData) await reloadAllData();
-      else loadData();
+      setTimeout(async () => { if (reloadAllData) await reloadAllData(); else loadData(); addToast('ลบข้อมูลเรียบร้อยแล้ว', 'success'); setIsLoading(false); }, 1500);
     } else {
       setIsLoading(false);
     }
@@ -3720,11 +3730,12 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
     const payload = { ...formData, _editingId: editingId };
     const response = await requestAPI('SAVE_DATA', 'Products', payload);
     if (response.status === 'success') {
-      addToast(editingId ? 'อัปเดตข้อมูลสำเร็จ' : 'เพิ่มข้อมูลใหม่สำเร็จ', 'success');
-      setIsLoading(false);
-      setIsModalOpen(false);
-      if (reloadAllData) await reloadAllData();
-      else loadData();
+      setTimeout(async () => {
+        if (reloadAllData) await reloadAllData(); else loadData();
+        addToast(editingId ? 'อัปเดตข้อมูลสำเร็จ' : 'เพิ่มข้อมูลใหม่สำเร็จ', 'success');
+        setIsLoading(false);
+        setIsModalOpen(false);
+      }, 1500);
     } else {
       setIsLoading(false);
     }
@@ -3737,10 +3748,7 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
     setIsLoading(true);
     const response = await requestAPI('DELETE_DATA', 'Products', { id: idToDelete });
     if (response.status === 'success') {
-      addToast('ลบข้อมูลเรียบร้อยแล้ว', 'success');
-      setIsLoading(false);
-      if (reloadAllData) await reloadAllData();
-      else loadData();
+      setTimeout(async () => { if (reloadAllData) await reloadAllData(); else loadData(); addToast('ลบข้อมูลเรียบร้อยแล้ว', 'success'); setIsLoading(false); }, 1500);
     } else {
       setIsLoading(false);
     }
@@ -3983,7 +3991,7 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
 // ==========================================
 // 5. STOCK MODULE (สต๊อกสินค้า)
 // ==========================================
-function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockData, setStockData, productData, billingData, lockData, isGlobalFetching }) {
+function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockData, setStockData, productData, billingData, lockData, isGlobalFetching, reloadAllData }) {
   const stocks = stockData || []; 
   const [isFetchingTable, setIsFetchingTable] = useState(stockData === null); 
   const [visibleCount, setVisibleCount] = useState(15);
@@ -4095,11 +4103,12 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
     
     const response = await requestAPI('SAVE_DATA', 'Stock', payload);
     if (response.status === 'success') {
-      addToast(editingId ? 'ปรับปรุงรายการสต๊อกสำเร็จ' : 'เพิ่มรายการประวัติสต๊อกสำเร็จ', 'success');
-      setIsLoading(false);
-      setIsModalOpen(false);
-      if (reloadAllData) await reloadAllData();
-      else loadData();
+      setTimeout(async () => {
+        if (reloadAllData) await reloadAllData(); else loadData();
+        addToast(editingId ? 'ปรับปรุงรายการสต๊อกสำเร็จ' : 'เพิ่มรายการประวัติสต๊อกสำเร็จ', 'success');
+        setIsLoading(false);
+        setIsModalOpen(false);
+      }, 1500);
     } else {
       setIsLoading(false);
     }
@@ -4128,10 +4137,7 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
     }
 
     if (success) {
-      addToast('ลบรายการประวัติสต๊อกออกแล้ว (ยอดจะเปลี่ยน)', 'success');
-      setIsLoading(false);
-      if (reloadAllData) await reloadAllData();
-      else loadData();
+      setTimeout(async () => { if (reloadAllData) await reloadAllData(); else loadData(); addToast('ลบรายการประวัติสต๊อกออกแล้ว (ยอดจะเปลี่ยน)', 'success'); setIsLoading(false); }, 1500);
     } else {
       setIsLoading(false);
     }
@@ -4653,10 +4659,11 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
         if (newStockData.status === 'success') setStockData(newStockData.data);
       }
 
-      addToast('ลบบิลและย้อนยอดสต๊อกคืนเรียบร้อยแล้ว', 'success');
-      setIsLoading(false);
-      if (reloadAllData) await reloadAllData();
-      else loadData();
+      setTimeout(async () => {
+        if (reloadAllData) await reloadAllData(); else loadData();
+        addToast('ลบบิลและย้อนยอดสต๊อกคืนเรียบร้อยแล้ว', 'success');
+        setIsLoading(false);
+      }, 1500);
     } else {
       setIsLoading(false);
     }
