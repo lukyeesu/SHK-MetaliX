@@ -4813,8 +4813,50 @@ export const generateA5ReceiptHtml = (bill, customer, companyInfo) => {
   const formatNumber = (num) => Number(num || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   
   const getThaiBahtText = (amount) => {
-    if (!amount || amount === 0) return 'ศูนย์บาทถ้วน';
-    return `(${formatNumber(amount)} บาทถ้วน)`; 
+    if (!amount || amount === 0) return '(ศูนย์บาทถ้วน)';
+    let number = Number(amount).toFixed(2);
+    const [integerPart, decimalPart] = number.split('.');
+    
+    const textNumbers = ['ศูนย์', 'หนึ่ง', 'สอง', 'สาม', 'สี่', 'ห้า', 'หก', 'เจ็ด', 'แปด', 'เก้า'];
+    const textUnits = ['', 'สิบ', 'ร้อย', 'พัน', 'หมื่น', 'แสน', 'ล้าน'];
+    
+    const convert = (numStr) => {
+      if (numStr === '0' || numStr === '00') return '';
+      let result = '';
+      const len = numStr.length;
+      for (let i = 0; i < len; i++) {
+        const digit = parseInt(numStr[i]);
+        const pos = len - 1 - i;
+        if (digit !== 0) {
+          if (pos === 1 && digit === 1) {
+            result += 'สิบ';
+          } else if (pos === 1 && digit === 2) {
+            result += 'ยี่สิบ';
+          } else if (pos === 0 && digit === 1 && len > 1 && numStr[len - 2] !== '0') {
+            result += 'เอ็ด';
+          } else {
+            result += textNumbers[digit] + textUnits[pos];
+          }
+        }
+      }
+      return result;
+    };
+
+    let result = '';
+    if (integerPart.length > 6) {
+      const millions = integerPart.substring(0, integerPart.length - 6);
+      const rest = integerPart.substring(integerPart.length - 6);
+      result += convert(millions) + 'ล้าน' + convert(rest) + 'บาท';
+    } else {
+      result += (convert(integerPart) || 'ศูนย์') + 'บาท';
+    }
+
+    if (decimalPart === '00') {
+      result += 'ถ้วน';
+    } else {
+      result += convert(decimalPart) + 'สตางค์';
+    }
+    return `(${result})`;
   };
 
   const dateStr = new Date(bill.createdAt || Date.now()).toLocaleDateString('th-TH');
@@ -4829,7 +4871,7 @@ export const generateA5ReceiptHtml = (bill, customer, companyInfo) => {
 
   const idCardHtml = cust.idCardImageUrl && cust.idCardImageUrl !== '-' 
     ? `<div class="id-card-image-wrapper"><img src="${cust.idCardImageUrl}" alt="ID Card" class="id-card-image" /></div>`
-    : `<div class="id-card-image-wrapper" style="display: flex; align-items: center; justify-content: center; border: 1px dashed #94a3b8; color: #94a3b8; font-size: 11pt;">รูปบัตรประชาชน</div>`;
+    : `<div class="id-card-image-wrapper" style="display: flex; align-items: center; justify-content: center; border: 1px dashed #000; color: #000; font-size: 11pt;">รูปบัตรประชาชน</div>`;
 
   const headerHtml = `
             <div class="receipt-header">
@@ -4857,70 +4899,80 @@ export const generateA5ReceiptHtml = (bill, customer, companyInfo) => {
             </div>
   `;
 
-  const pagesHtml = chunks.map((chunk, pageIndex) => {
-    const isLastPage = pageIndex === chunks.length - 1;
-    const currentHeaderHtml = pageIndex === 0 ? headerHtml : '';
-    let itemsHtml = chunk.map((item, localIndex) => {
-      const globalIndex = (pageIndex * chunkSize) + localIndex;
-      const qty = Number(item.quantity) || 0;
-      const price = Number(item.price) || 0;
-      const deduct = Number(item.deductWeight) || 0;
-      const finalQty = qty - deduct;
-      const amount = finalQty * price;
-      
+  const getPagesHtml = (tagLabel) => {
+    return chunks.map((chunk, pageIndex) => {
+      const isLastPage = pageIndex === chunks.length - 1;
+      let currentHeaderHtml = pageIndex === 0 ? headerHtml.replace('(ต้นฉบับ)', tagLabel) : '';
+      let itemsHtml = chunk.map((item, localIndex) => {
+        const globalIndex = (pageIndex * chunkSize) + localIndex;
+        const qty = Number(item.quantity) || 0;
+        const price = Number(item.price) || 0;
+        const deduct = Number(item.deductWeight) || 0;
+        const finalQty = qty - deduct;
+        const amount = finalQty * price;
+        
+        return `
+          <tr>
+            <td class="text-center" style="padding: 2px 4px; border-bottom: 1px dotted #e2e8f0;">${globalIndex + 1}</td>
+            <td style="padding: 2px 4px; border-bottom: 1px dotted #e2e8f0;">${item.name || 'สินค้าทั่วไป'}</td>
+            <td class="text-right" style="padding: 2px 4px; border-bottom: 1px dotted #e2e8f0;">${formatNumber(qty)}</td>
+            <td class="text-right" style="padding: 2px 4px; border-bottom: 1px dotted #e2e8f0;">${deduct > 0 ? formatNumber(deduct) : '-'}</td>
+            <td class="text-right" style="padding: 2px 4px; border-bottom: 1px dotted #e2e8f0;">${formatNumber(finalQty)}</td>
+            <td class="text-right" style="padding: 2px 4px; border-bottom: 1px dotted #e2e8f0;">${formatNumber(price)}</td>
+            <td class="text-right font-bold" style="padding: 2px 4px; border-bottom: 1px dotted #e2e8f0;">${formatNumber(amount)}</td>
+          </tr>
+        `;
+      }).join('');
+
+      const footerHtml = isLastPage ? `
+              <div class="receipt-footer">
+                  <div style="font-weight: 600; font-size: 10pt; color: #000; margin-right: 15px;">
+                      ${getThaiBahtText(bill.grandTotal)}
+                  </div>
+                  <div class="total-amount-box">
+                      <span class="total-amount-label">จำนวนเงินทั้งสิ้น</span>
+                      <span class="total-amount-value">${formatNumber(bill.grandTotal)} บาท</span>
+                  </div>
+              </div>
+              <div class="signatures">
+                  <div class="signature-box">
+                      <div class="signature-name">(...................................................)</div>
+                      <div class="signature-role">ผู้รับเงิน / ผู้รับบริการ</div>
+                  </div>
+                  <div class="signature-box">
+                      <div class="signature-name">(...................................................)</div>
+                      <div class="signature-role">เจ้าหน้าที่ / ผู้มีอำนาจลงนาม</div>
+                  </div>
+              </div>
+      ` : '';
+
       return `
-        <tr>
-          <td class="text-center" style="padding: 2px 4px; border-bottom: 1px dotted #e2e8f0;">${globalIndex + 1}</td>
-          <td style="padding: 2px 4px; border-bottom: 1px dotted #e2e8f0;">${item.name || 'สินค้าทั่วไป'}</td>
-          <td class="text-center" style="padding: 2px 4px; border-bottom: 1px dotted #e2e8f0;">${formatNumber(qty)} ${item.unit || 'กก.'}</td>
-          <td class="text-center" style="padding: 2px 4px; border-bottom: 1px dotted #e2e8f0;">${formatNumber(price)}</td>
-          <td class="text-center" style="padding: 2px 4px; border-bottom: 1px dotted #e2e8f0;">${deduct > 0 ? formatNumber(deduct) : '-'}</td>
-          <td class="text-right font-bold" style="padding: 2px 4px; border-bottom: 1px dotted #e2e8f0;">${formatNumber(amount)}</td>
-        </tr>
+          <div class="receipt-container">
+              ${currentHeaderHtml}
+              <div class="receipt-table-section">
+                  <table class="receipt-table">
+                      <thead>
+                          <tr>
+                              <th class="text-center" style="width: 6%;">ลำดับ</th>
+                              <th>รายการ</th>
+                              <th class="text-right" style="width: 11%;">จำนวน(kg.)</th>
+                              <th class="text-right" style="width: 11%;">หัก นน.(kg.)</th>
+                              <th class="text-right" style="width: 11%;">น้ำหนักสุทธิ</th>
+                              <th class="text-right" style="width: 12%;">ราคา/หน่วย</th>
+                              <th class="text-right" style="width: 14%;">รวม</th>
+                          </tr>
+                      </thead>
+                      <tbody>${itemsHtml}</tbody>
+                  </table>
+              </div>
+              ${footerHtml}
+              <div style="position: absolute; bottom: 0; right: 0; font-size: 9pt; font-weight: 600; color: #000;">หน้า ${pageIndex + 1}/${chunks.length}</div>
+          </div>
       `;
     }).join('');
+  };
 
-    const footerHtml = isLastPage ? `
-            <div class="receipt-footer">
-                <div class="total-amount-box">
-                    <span class="total-amount-label">จำนวนเงินทั้งสิ้น</span>
-                    <span class="total-amount-value">${formatNumber(bill.grandTotal)} บาท</span>
-                </div>
-            </div>
-            <div class="signatures">
-                <div class="signature-box">
-                    <div class="signature-name">(...................................................)</div>
-                    <div class="signature-role">ผู้รับเงิน / ผู้รับบริการ</div>
-                </div>
-                <div class="signature-box">
-                    <div class="signature-name">(...................................................)</div>
-                    <div class="signature-role">เจ้าหน้าที่ / ผู้มีอำนาจลงนาม</div>
-                </div>
-            </div>
-    ` : '';
-
-    return `
-        <div class="receipt-container">
-            ${currentHeaderHtml}
-            <div class="receipt-table-section">
-                <table class="receipt-table">
-                    <thead>
-                        <tr>
-                            <th class="text-center" style="width: 40px;">ลำดับ</th>
-                            <th>รายการสินค้า / บริการ</th>
-                            <th class="text-center" style="width: 100px;">จำนวน</th>
-                            <th class="text-center" style="width: 100px;">ราคาต่อหน่วย</th>
-                            <th class="text-center" style="width: 100px;">หัก นน.</th>
-                            <th class="text-right" style="width: 120px;">จำนวนเงิน</th>
-                        </tr>
-                    </thead>
-                    <tbody>${itemsHtml}</tbody>
-                </table>
-            </div>
-            ${footerHtml}
-        </div>
-    `;
-  }).join('');
+  const pagesHtml = getPagesHtml('(ต้นฉบับ)') + getPagesHtml('(สำเนา)');
 
   return `
     <!DOCTYPE html>
@@ -4930,23 +4982,26 @@ export const generateA5ReceiptHtml = (bill, customer, companyInfo) => {
         <title>พิมพ์ใบเสร็จ - ${bill.id}</title>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
-            @page { size: A5 landscape; }
+            @page { size: A5 landscape; margin: 5mm; }
             body { 
                 font-family: 'Inter', sans-serif;
                 margin: 0;
                 padding: 0;
                 background: white;
-                color: #1e293b;
+                color: #000;
                 -webkit-print-color-adjust: exact; 
                 print-color-adjust: exact;
             }
             .receipt-container { 
                 width: 100%; 
+                height: 136mm;
+                position: relative;
                 padding: 0; 
                 box-sizing: border-box; 
-                display: flex; 
-                flex-direction: column; 
+                display: block; 
                 page-break-after: always;
+                page-break-inside: avoid;
+                break-inside: avoid;
             }
             .receipt-container:last-child {
                 page-break-after: auto;
@@ -4954,27 +5009,27 @@ export const generateA5ReceiptHtml = (bill, customer, companyInfo) => {
             .receipt-header { display: flex; justify-content: space-between; margin-bottom: 1mm; }
             .receipt-header-left { flex: 1; font-size: 9pt; padding-right: 5mm; }
             .company-name { font-size: 14pt; font-weight: 700; margin: 0; }
-            .company-details { color: #64748b; margin: 0 0 1mm 0; line-height: 1.1; }
-            .customer-info { margin-bottom: 1mm; line-height: 1.1; }
+            .company-details { color: #000; margin: 0 0 1mm 0; line-height: 1.1; }
+            .customer-info { margin-top: 5mm; margin-bottom: 1mm; line-height: 1.1; }
             .info-row { display: flex; margin-bottom: 0.5mm; }
             .info-label { width: 20mm; font-weight: 600; }
             .info-value { flex: 1; }
             .doc-info-box { background-color: #f0f9ff; border: 1px solid #bae6fd; border-radius: 4px; padding: 2mm; display: inline-block; min-width: 50mm; line-height: 1.1; }
             .receipt-header-right { width: 85.6mm; display: flex; flex-direction: column; align-items: flex-end; }
             .receipt-title-box { text-align: right; margin-bottom: 1mm; }
-            .receipt-original-tag { font-size: 9pt; color: #64748b; }
+            .receipt-original-tag { font-size: 9pt; color: #000; }
             .receipt-title { font-size: 14pt; font-weight: 700; color: #0284c7; margin: 0; }
             .id-card-image-wrapper { width: 85.6mm; height: 53.98mm; background: #f8fafc; border-radius: 4px; overflow: hidden; border: 1px solid #e2e8f0; margin-right: 1mm; }
             .id-card-image { width: 100%; height: 100%; object-fit: contain; }
-            .receipt-table-section { flex: 1; margin-bottom: 1mm; }
+            .receipt-table-section { margin-bottom: 1mm; }
             .receipt-table { width: 100%; border-collapse: collapse; font-size: 9pt; }
             .receipt-table th { background-color: #f0f9ff; color: #0284c7; padding: 2px 4px; border-bottom: 1px solid #bae6fd; border-top: 1px solid #bae6fd; text-align: left;}
-            .receipt-footer { display: flex; justify-content: flex-end; align-items: center; padding: 1mm 0; margin-bottom: 1mm; }
+            .receipt-footer { display: flex; justify-content: flex-end; align-items: center; padding: 0.5mm 0; margin-bottom: 0; page-break-inside: avoid; break-inside: avoid; }
             .total-amount-box { display: flex; background-color: #f0f9ff; border: 1px solid #bae6fd; border-radius: 4px; padding: 1mm 3mm; gap: 3mm; align-items: center; }
             .total-amount-label { font-weight: 700; font-size: 9pt; }
             .total-amount-value { font-size: 11pt; font-weight: 700; color: #0284c7; }
-            .signatures { display: flex; justify-content: space-between; padding: 0 10mm; margin-top: 7mm; }
-            .signature-box { text-align: center; font-size: 10pt; color: #475569; display: flex; flex-direction: column; align-items: center; }
+            .signatures { display: flex; justify-content: space-between; padding: 0 10mm; margin-top: 8mm; page-break-inside: avoid; break-inside: avoid; }
+            .signature-box { text-align: center; font-size: 10pt; color: #000; display: flex; flex-direction: column; align-items: center; }
             .text-center { text-align: center !important; }
             .text-right { text-align: right !important; }
             .font-bold { font-weight: 700; }
