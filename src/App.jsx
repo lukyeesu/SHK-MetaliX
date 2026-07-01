@@ -649,7 +649,7 @@ export default function App() {
   // --- Global Bill Modal State ---
   const [billModalConfig, setBillModalConfig] = useState({ isOpen: false, bill: null, isViewOnly: false });
   const openBillModal = (bill = null, isViewOnly = false) => setBillModalConfig({ isOpen: true, bill, isViewOnly });
-  const closeBillModal = () => setBillModalConfig({ isOpen: false, bill: null, isViewOnly: false });
+  const closeBillModal = () => setBillModalConfig(prev => ({ ...prev, isOpen: false }));
 
   // ดึง Data ทั้งหมด
   const loadAllData = async () => {
@@ -1220,7 +1220,7 @@ export default function App() {
 
 // --- Component สำหรับบิลล์แบบ Global ---
 function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToast, requestAPI, billingData, customerData, productData, dailyPriceData, lockData, stockData, reloadAllData }) {
-  if (!config.isOpen) return null;
+  const { isAnimatingOut: isClosing, shouldRender } = useModalAnimation(config.isOpen);
 
   const isViewOnly = config.isViewOnly;
   const editingId = config.bill ? config.bill.id : null;
@@ -1257,6 +1257,14 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
   const [customerSearch, setCustomerSearch] = useState(config.bill ? config.bill.customerName : '');
   const customerRef = useRef(null);
   const [shakeQuotaBtn, setShakeQuotaBtn] = useState(false);
+
+  useEffect(() => {
+    if (config.isOpen) {
+      setFormData(initialFormData);
+      setCustomerSearch(config.bill ? config.bill.customerName : '');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.isOpen, config.bill]);
 
   // ดึงราคาสินค้าอิงจาก "วันที่ทำรายการ (date)"
   const priceDateStr = formData.date ? formData.date.split('T')[0] : '';
@@ -1599,9 +1607,11 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
     }));
   };
 
+  if (!shouldRender) return null;
+
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[120] flex items-center justify-center p-3 sm:p-4 font-body">
-      <div className="bg-white w-full max-w-4xl shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[90vh] rounded-[20px] sm:rounded-[24px] overflow-hidden animate-in fade-in zoom-in duration-200">
+    <div className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[120] flex items-center justify-center p-3 sm:p-4 font-body ${isClosing ? 'backdrop-animate-out' : 'backdrop-animate-in'}`}>
+      <div className={`bg-white w-full max-w-4xl shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[90vh] rounded-[20px] sm:rounded-[24px] overflow-hidden ${isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
         <div className="px-6 py-4 flex justify-between items-center bg-white border-b border-slate-100 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center"><BarChart3 className="w-5 h-5" /></div>
