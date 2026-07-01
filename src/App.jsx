@@ -6,7 +6,7 @@ import {
   MapPin, Scan, Camera, Clock, Tag, CircleDollarSign, Warehouse, AlertTriangle,
   Scale, Save, PlusCircle, CalendarClock, Minus, 
   ArrowDownCircle, ArrowUpCircle, FileDown, DollarSign,
-  LayoutDashboard, LogOut, ChevronLeft, ChevronRight, User, Home, Bell, Phone
+  LayoutDashboard, LogOut, ChevronLeft, ChevronRight, User, Home, Bell, Phone, LayoutList
 } from 'lucide-react';
 import PublicPriceBoard from './PublicPriceBoard';
 
@@ -17,10 +17,12 @@ const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyCy3fR2cCaeU
 
 
 const FullPageLoader = ({ message }) => (
-  <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-[9999] flex flex-col items-center justify-center font-body">
-    <Loader2 className="w-12 h-12 text-sky-500 animate-spin mb-4" />
-    <div className="bg-white px-6 py-3 rounded-[16px] shadow-[0_8px_32px_rgba(0,0,0,0.04)] font-medium text-slate-800 border border-slate-100">
-      {message || 'กำลังประมวลผล...'}
+  <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-[9999] flex flex-col items-center justify-center font-body backdrop-animate-in">
+    <div className="flex flex-col items-center justify-center modal-animate-in">
+      <Loader2 className="w-12 h-12 text-sky-500 animate-spin mb-4" />
+      <div className="bg-white px-6 py-3 rounded-[16px] shadow-[0_8px_32px_rgba(0,0,0,0.04)] font-medium text-slate-800 border border-slate-100">
+        {message || 'กำลังประมวลผล...'}
+      </div>
     </div>
   </div>
 );
@@ -43,11 +45,46 @@ const Toast = ({ toasts, removeToast }) => (
   </div>
 );
 
-const ConfirmAlert = ({ isOpen, title, text, onConfirm, onCancel, children }) => {
-  if (!isOpen) return null;
+const useModalAnimation = (isOpen, duration = 250) => {
+  const [shouldRender, setShouldRender] = useState(isOpen);
+  const [isAnimatingOut, setIsAnimatingOut] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setShouldRender(true);
+      setIsAnimatingOut(false);
+    } else if (shouldRender) {
+      setIsAnimatingOut(true);
+      const timer = setTimeout(() => {
+        setShouldRender(false);
+        setIsAnimatingOut(false);
+      }, duration);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, shouldRender, duration]);
+
+  return { shouldRender, isAnimatingOut };
+};
+
+const ModalWrapper = ({ isOpen, onClose, zIndex = "z-[120]", maxWidth = "max-w-4xl", children }) => {
+  const { shouldRender, isAnimatingOut } = useModalAnimation(isOpen);
+  if (!shouldRender) return null;
+  
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
-      <div className={`bg-white rounded-[24px] w-full ${children ? 'max-w-4xl' : 'max-w-sm'} shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]`}>
+    <div className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm ${zIndex} flex items-center justify-center p-3 sm:p-4 font-body ${isAnimatingOut ? 'backdrop-animate-out' : 'backdrop-animate-in'}`} onClick={onClose}>
+      <div className={`bg-white w-full ${maxWidth} shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[90vh] rounded-[20px] sm:rounded-[24px] overflow-hidden ${isAnimatingOut ? 'modal-animate-out' : 'modal-animate-in'}`} onClick={e => e.stopPropagation()}>
+        {children}
+      </div>
+    </div>
+  );
+};
+
+const ConfirmAlert = ({ isOpen, title, text, onConfirm, onCancel, children }) => {
+  const { shouldRender, isAnimatingOut } = useModalAnimation(isOpen);
+  if (!shouldRender) return null;
+  return (
+    <div className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 ${isAnimatingOut ? 'backdrop-animate-out' : 'backdrop-animate-in'}`}>
+      <div className={`bg-white rounded-[24px] w-full ${children ? 'max-w-4xl' : 'max-w-sm'} shadow-2xl overflow-hidden flex flex-col max-h-[90vh] ${isAnimatingOut ? 'modal-animate-out' : 'modal-animate-in'}`}>
         <div className="p-6 shrink-0 text-center pb-2">
           <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4 text-rose-500"><AlertTriangle className="w-8 h-8" /></div>
           <h3 className="text-[20px] font-bold text-slate-800 mb-2">{title}</h3>
@@ -532,31 +569,59 @@ export default function App() {
     dragStartX.current = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
   };
 
-  // --- Effect 3: ซ่อน/แสดง Mobile Bars เวลากวาดนิ้ว (Scroll) ---
+  // --- Effect 3: ซ่อน/แสดง Mobile Bars เวลากวาดนิ้ว (Scroll) ด้วย Native DOM ลดอาการกระตุก 120fps ---
   useEffect(() => {
     const mainElement = mainRef.current;
     if (!mainElement) return;
+
+    const showBars = () => {
+      document.body.classList.remove('hide-mobile-bars');
+      document.getElementById('mobile-top-header')?.classList.add('translate-y-0');
+      document.getElementById('mobile-top-header')?.classList.remove('-translate-y-full');
+      document.getElementById('mobile-bottom-nav')?.classList.add('translate-y-0');
+      document.getElementById('mobile-bottom-nav')?.classList.remove('translate-y-[120%]');
+    };
+
+    const hideBars = () => {
+      document.body.classList.add('hide-mobile-bars');
+      document.getElementById('mobile-top-header')?.classList.remove('translate-y-0');
+      document.getElementById('mobile-top-header')?.classList.add('-translate-y-full');
+      document.getElementById('mobile-bottom-nav')?.classList.remove('translate-y-0');
+      document.getElementById('mobile-bottom-nav')?.classList.add('translate-y-[120%]');
+    };
 
     const handleGlobalScroll = (e) => {
       if (!isMobile) return; 
       const currentScrollY = e.target.scrollTop;
 
       if (currentScrollY <= 20) {
-        setShowMobileBars(true);
+        showBars();
         lastScrollY.current = currentScrollY;
         return;
       }
 
       if (Math.abs(currentScrollY - lastScrollY.current) < 15) return;
 
-      if (currentScrollY > lastScrollY.current) setShowMobileBars(false); 
-      else setShowMobileBars(true); 
+      if (currentScrollY > lastScrollY.current) hideBars(); 
+      else showBars(); 
       
       lastScrollY.current = currentScrollY;
     };
 
+    // Fix for Chrome Address bar issue: force show menu on resize (when address bar appears)
+    const handleResize = () => {
+      if (isMobile) showBars();
+    };
+
     mainElement.addEventListener('scroll', handleGlobalScroll, { passive: true });
-    return () => mainElement.removeEventListener('scroll', handleGlobalScroll);
+    window.visualViewport?.addEventListener('resize', handleResize);
+    window.addEventListener('resize', handleResize);
+    
+    return () => {
+      mainElement.removeEventListener('scroll', handleGlobalScroll);
+      window.visualViewport?.removeEventListener('resize', handleResize);
+      window.removeEventListener('resize', handleResize);
+    };
   }, [isMobile]);
 
   const handleTabClick = (tabId) => {
@@ -733,7 +798,7 @@ export default function App() {
   }
 
   return (
-    <div className="w-full h-screen bg-slate-50 flex relative overflow-hidden text-slate-800 font-sans">
+    <div className="w-full h-[100dvh] bg-slate-50 flex relative overflow-hidden text-slate-800 font-sans">
       
       {/* =========================================
           MOBILE LAYOUT: Backdrop & Off-canvas Menu
@@ -883,7 +948,7 @@ export default function App() {
       {/* =========================================
           MOBILE TOP HEADER: Auto Hide on Scroll
           ========================================= */}
-      <header className={`md:hidden fixed top-0 left-0 right-0 flex items-center justify-between px-4 py-3 bg-white/90 backdrop-blur-xl border-b border-slate-200/60 z-[45] shadow-sm transition-transform duration-300 ease-in-out ${showMobileBars ? 'translate-y-0' : '-translate-y-full'}`}>
+      <header id="mobile-top-header" className={`md:hidden h-[56px] fixed top-0 left-0 right-0 flex items-center justify-between px-4 py-3 bg-white/90 backdrop-blur-xl border-b border-slate-200/60 z-[45] shadow-sm transition-transform duration-300 ease-in-out translate-y-0`}>
         <button 
           onClick={() => setIsSidebarExpanded(true)} 
           className="flex items-center gap-2 active:scale-95 transition-transform outline-none"
@@ -901,7 +966,7 @@ export default function App() {
       {/* =========================================
           MAIN CONTENT AREA
           ========================================= */}
-      <main ref={mainRef} className="flex-1 flex flex-col overflow-y-auto relative bg-slate-50 custom-scroll" id="main-scroll-container" style={{ "--header-offset": (isMobile && showMobileBars) ? "56px" : "0px" }} onScroll={(e) => {
+      <main ref={mainRef} className="flex-1 flex flex-col overflow-y-auto relative bg-slate-50 custom-scroll" id="main-scroll-container" onScroll={(e) => {
         const { scrollTop, scrollHeight, clientHeight } = e.target;
         if (scrollHeight - scrollTop - clientHeight < 400) {
           window.dispatchEvent(new Event('scroll-to-bottom'));
@@ -909,7 +974,7 @@ export default function App() {
       }}>
         
         {/* Spacers for Mobile to prevent content from hiding behind fixed headers/footers */}
-        <div className={`md:hidden shrink-0 w-full transition-all duration-300 ${showMobileBars ? 'h-[64px]' : 'h-0'}`}></div>
+        <div className="md:hidden shrink-0 w-full h-[56px] pointer-events-none"></div>
 
         <div className="flex-1 w-full flex flex-col h-full">
           {activeMenu === 'daily_prices' ? (
@@ -961,7 +1026,7 @@ export default function App() {
       {/* =========================================
           MOBILE BOTTOM NAV (LIQUID TAB BAR)
           ========================================= */}
-      <div className={`md:hidden fixed bottom-0 left-0 w-full bg-white/95 backdrop-blur-xl border border-b-0 border-slate-200/80 rounded-t-[1.5rem] shadow-[0_-8px_30px_rgba(0,0,0,0.06)] pb-[calc(max(0.5rem,env(safe-area-inset-bottom)))] pt-2 px-2 z-[45] transition-transform duration-300 ease-in-out ${showMobileBars ? 'translate-y-0' : 'translate-y-[120%]'}`}>
+      <div id="mobile-bottom-nav" className={`md:hidden fixed bottom-0 left-0 w-full bg-white/95 backdrop-blur-xl border border-b-0 border-slate-200/80 rounded-t-[1.5rem] shadow-[0_-8px_30px_rgba(0,0,0,0.06)] pb-[calc(max(0.5rem,env(safe-area-inset-bottom)))] pt-2 px-2 z-[45] transition-transform duration-300 ease-in-out translate-y-0`}>
         <div className="relative flex w-full max-w-sm mx-auto h-14">
             
             <div 
@@ -1022,20 +1087,26 @@ export default function App() {
         input[type="date"], input[type="datetime-local"] {
           accent-color: #0ea5e9;
           transition: border-color 0.2s ease, box-shadow 0.2s ease;
+          position: relative;
+          -webkit-appearance: none;
+          appearance: none;
         }
+        
+        /* ทำการซ่อนไอคอน V หรือ Calendar ของ Browser ให้โปร่งใส 
+           แต่ยืดให้เต็มเพื่อให้คลิกได้จากทุกจุดบนช่อง (โดยเฉพาะบน Desktop) */
         input[type="date"]::-webkit-calendar-picker-indicator,
         input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          opacity: 0;
           cursor: pointer;
-          border-radius: 8px;
-          padding: 4px;
-          transition: all 0.2s ease;
-          filter: sepia(100%) saturate(2000%) hue-rotate(170deg) brightness(90%) contrast(95%);
+          color: transparent;
+          background: transparent;
         }
-        input[type="date"]::-webkit-calendar-picker-indicator:hover,
-        input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
-          background-color: rgba(14, 165, 233, 0.1);
-        }
-
+        
         /* ตกแต่ง dropdowns และฟอร์มทั้งหมดให้โค้งมนสวยงามระดับพรีเมียม */
         select, input, textarea {
           transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -1059,21 +1130,28 @@ export default function App() {
         @media (max-width: 768px) { .is-scrolled.sticky-filter-inner, .is-scrolled .sticky-filter-inner { padding-top: 2.125rem; padding-bottom: 0.875rem; padding-left: 1rem; padding-right: 1rem; } }
       
         /* คลาสสำหรับระบบ Drag & Drop 60FPS */
-        body
         .sticky-header-module {
-          top: var(--header-offset);
+          top: 56px;
+          transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
+        .sticky-filter-module {
+          top: 120px;
+          transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        body.hide-mobile-bars .sticky-header-module,
+        body.hide-mobile-bars .sticky-filter-module {
+          transform: translateY(-56px);
+        }
+
         @media (min-width: 768px) {
           .sticky-header-module {
             top: 0;
+            transform: none !important;
           }
-        }
-        .sticky-filter-module {
-          top: calc(var(--header-offset) + 64px);
-        }
-        @media (min-width: 768px) {
           .sticky-filter-module {
             top: 72px;
+            transform: none !important;
           }
         }
 
@@ -1101,6 +1179,37 @@ export default function App() {
         }
         .animate-scale-up {
           animation: scale-up 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+
+        /* --- Global Modal Animations --- */
+        @keyframes modal-zoom-in {
+          0% { transform: scale(0.85); opacity: 0; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes modal-zoom-out {
+          0% { transform: scale(1); opacity: 1; }
+          25% { transform: scale(1.03); opacity: 1; }
+          100% { transform: scale(0.85); opacity: 0; }
+        }
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes fade-out {
+          from { opacity: 1; }
+          to { opacity: 0; }
+        }
+        .modal-animate-in {
+          animation: modal-zoom-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+        .modal-animate-out {
+          animation: modal-zoom-out 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+        .backdrop-animate-in {
+          animation: fade-in 0.3s ease-out forwards;
+        }
+        .backdrop-animate-out {
+          animation: fade-out 0.25s ease-in forwards;
         }
 `}} />
     </div>
@@ -1489,8 +1598,8 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[120] flex items-center justify-center p-4 font-body">
-      <div className="bg-white rounded-[24px] w-full max-w-4xl shadow-2xl flex flex-col h-[95vh] overflow-hidden animate-in fade-in zoom-in duration-200">
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[120] flex items-center justify-center p-3 sm:p-4 font-body">
+      <div className="bg-white w-full max-w-4xl shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[90vh] rounded-[20px] sm:rounded-[24px] overflow-hidden animate-in fade-in zoom-in duration-200">
         <div className="px-6 py-4 flex justify-between items-center bg-white border-b border-slate-100 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center"><BarChart3 className="w-5 h-5" /></div>
@@ -1502,48 +1611,75 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 transition-colors"><X className="w-5 h-5" /></button>
         </div>
 
-        <div className="p-6 overflow-y-auto bg-white space-y-6 flex-1 flex flex-col">
-          <div className="flex gap-4 shrink-0">
-            <button disabled={isViewOnly} onClick={() => setFormData({...formData, type: 'BUY', category: 'ซื้อของเก่า'})}
-              className={`flex-1 py-4 rounded-[20px] border-2 flex flex-col items-center justify-center gap-2 transition-all ${formData.type === 'BUY' ? 'border-sky-500 bg-sky-50 text-sky-600 shadow-sm' : 'border-slate-100 bg-white text-slate-400 hover:border-slate-200'}`}>
-              <ArrowDownCircle className={`w-8 h-8 ${formData.type === 'BUY' ? 'text-sky-500' : 'text-slate-300'}`} />
-              <span className="font-bold text-[16px]">บิลรับซื้อ (รายจ่าย)</span>
-            </button>
-            <button disabled={isViewOnly} onClick={() => setFormData({...formData, type: 'SELL', category: 'ขายของเก่า'})}
-              className={`flex-1 py-4 rounded-[20px] border-2 flex flex-col items-center justify-center gap-2 transition-all ${formData.type === 'SELL' ? 'border-emerald-500 bg-emerald-50 text-emerald-600 shadow-sm' : 'border-slate-100 bg-white text-slate-400 hover:border-slate-200'}`}>
-              <ArrowUpCircle className={`w-8 h-8 ${formData.type === 'SELL' ? 'text-emerald-500' : 'text-slate-300'}`} />
-              <span className="font-bold text-[16px]">บิลขายออก (รายรับ)</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-5 shrink-0">
-            <div className="space-y-1.5">
-              <label className="text-[13px] font-medium text-slate-500">เลขที่รายการ</label>
-              <input value={formData.id} readOnly className="w-full h-[48px] px-4 bg-slate-50 border border-slate-200 rounded-[12px] font-mono-code text-[14px] text-slate-500 outline-none" />
+        <div className="p-4 sm:p-6 overflow-y-auto bg-slate-50/50 space-y-4 sm:space-y-6 flex-1 flex flex-col">
+          
+          <div className="bg-white border border-slate-200/60 rounded-[20px] p-4 sm:p-6 shadow-sm flex flex-col gap-5 shrink-0">
+            <div className="flex items-center gap-2 text-sky-600 border-b border-slate-100 pb-3"><Info className="w-5 h-5" /><h4 className="font-bold text-[16px]">ข้อมูลบิล</h4></div>
+            
+            <div className="flex gap-4">
+              <button disabled={isViewOnly} onClick={() => setFormData({...formData, type: 'BUY', category: 'ซื้อของเก่า'})}
+                className={`flex-1 py-3 sm:py-4 rounded-[16px] border-2 flex flex-col items-center justify-center gap-1 sm:gap-2 transition-all ${formData.type === 'BUY' ? 'border-sky-500 bg-sky-50 text-sky-600 shadow-sm' : 'border-slate-100 bg-white text-slate-400 hover:border-slate-200'}`}>
+                <ArrowDownCircle className={`w-6 h-6 sm:w-8 sm:h-8 ${formData.type === 'BUY' ? 'text-sky-500' : 'text-slate-300'}`} />
+                <span className="font-bold text-[14px] sm:text-[16px]">บิลรับซื้อ (รายจ่าย)</span>
+              </button>
+              <button disabled={isViewOnly} onClick={() => setFormData({...formData, type: 'SELL', category: 'ขายของเก่า'})}
+                className={`flex-1 py-3 sm:py-4 rounded-[16px] border-2 flex flex-col items-center justify-center gap-1 sm:gap-2 transition-all ${formData.type === 'SELL' ? 'border-emerald-500 bg-emerald-50 text-emerald-600 shadow-sm' : 'border-slate-100 bg-white text-slate-400 hover:border-slate-200'}`}>
+                <ArrowUpCircle className={`w-6 h-6 sm:w-8 sm:h-8 ${formData.type === 'SELL' ? 'text-emerald-500' : 'text-slate-300'}`} />
+                <span className="font-bold text-[14px] sm:text-[16px]">บิลขายออก (รายรับ)</span>
+              </button>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-[13px] font-medium text-slate-500">วันที่ทำรายการ (อิงราคา) <span className="text-rose-500">*</span></label>
-              <div className="relative">
-                <input disabled={isViewOnly} type="datetime-local" step="1" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="w-full h-[48px] pl-4 pr-10 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50 disabled:text-slate-500" />
-                <CalendarClock className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-sky-500 pointer-events-none opacity-80" />
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4 sm:gap-y-5">
+              <div className="space-y-1.5">
+                <label className="text-[13px] font-medium text-slate-600">เลขที่รายการ</label>
+                <input value={formData.id} readOnly className="w-full h-[44px] px-4 bg-slate-50 border border-slate-200 rounded-[12px] font-mono-code text-[14px] text-slate-500 outline-none" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[13px] font-medium text-slate-600">วันที่ทำรายการ <span className="text-rose-500">*</span></label>
+                <div className="relative">
+                  <input disabled={isViewOnly} type="datetime-local" step="1" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="w-full h-[44px] pl-4 pr-10 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50 disabled:text-slate-500" />
+                  <CalendarClock className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-sky-500 pointer-events-none opacity-80" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[13px] font-medium text-slate-600">หมวดหมู่ <span className="text-rose-500">*</span></label>
+                <select disabled={isViewOnly} value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} className="w-full h-[44px] px-4 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50">
+                  <option value="ซื้อของเก่า">ซื้อของเก่า</option><option value="ขายของเก่า">ขายของเก่า</option><option value="อื่นๆ">อื่นๆ</option>
+                </select>
               </div>
             </div>
-            {/* หมวดหมู่ (ย้ายขึ้นมาให้แสดงสำหรับทั้ง BUY และ SELL) */}
-            <div className="space-y-1.5 shrink-0">
-              <label className="text-[13px] font-medium text-slate-500">หมวดหมู่ <span className="text-rose-500">*</span></label>
-              <select disabled={isViewOnly} value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} className="w-full h-[48px] px-4 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50">
-                <option value="ซื้อของเก่า">ซื้อของเก่า</option><option value="ขายของเก่า">ขายของเก่า</option><option value="อื่นๆ">อื่นๆ</option>
-              </select>
-            </div>
 
-            {/* โซนเลือกโควตา (เฉพาะบิลรับซื้อ) */}
-            {formData.type === 'BUY' && (
-              <div className="space-y-1.5 md:col-span-3 bg-slate-50 p-4 rounded-[16px] border border-slate-100">
-                <div className="flex items-center justify-between mb-3">
-                  <label className="text-[13px] font-bold text-sky-600 flex items-center gap-1.5"><Lock className="w-4 h-4"/> โควตาที่ต้องการใช้ (หักน้ำหนัก) <span className="text-rose-500">*</span></label>
+            <div className="space-y-1.5" ref={customerRef}>
+              <label className="text-[13px] font-medium text-slate-600">ลูกค้าอ้างอิง (ชื่อ, เบอร์โทร) <span className="text-rose-500">*</span></label>
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                <input disabled={isViewOnly} type="text" value={customerSearch} onChange={(e) => { setCustomerSearch(e.target.value); setIsCustomerDropdownOpen(true); if (e.target.value !== formData.customerName) setFormData({...formData, customerId: '', customerName: e.target.value}); }} onFocus={() => setIsCustomerDropdownOpen(true)} className="w-full h-[48px] pl-12 pr-4 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all disabled:bg-slate-50 placeholder:text-slate-300" placeholder="ค้นหาหรือพิมพ์ชื่อลูกค้า..." />
+                {isCustomerDropdownOpen && !isViewOnly && (
+                  <ul className="absolute z-50 w-full mt-2 bg-white border border-slate-100 rounded-[16px] shadow-[0_8px_30px_rgba(0,0,0,0.12)] max-h-60 overflow-y-auto py-2">
+                    {(customerData || []).filter(c => (c.name || '').toLowerCase().includes(customerSearch.toLowerCase()) || (c.phone || '').toLowerCase().includes(customerSearch.toLowerCase()) || (c.id || '').toLowerCase().includes(customerSearch.toLowerCase())).length > 0 ? (
+                      (customerData || []).filter(c => (c.name || '').toLowerCase().includes(customerSearch.toLowerCase()) || (c.phone || '').toLowerCase().includes(customerSearch.toLowerCase()) || (c.id || '').toLowerCase().includes(customerSearch.toLowerCase())).map(c => (
+                        <li key={c.id} onClick={() => { setFormData({...formData, customerId: c.id, customerName: c.name}); setCustomerSearch(c.name); setIsCustomerDropdownOpen(false); }} className="px-5 py-3 hover:bg-sky-50 cursor-pointer text-[14px] text-slate-700 border-b border-slate-50 flex items-center justify-between transition-colors">
+                          <div className="flex flex-col"><span className="font-bold text-slate-800">{c.name}</span><span className="text-[12px] text-slate-400 font-mono-code">{c.phone || 'ไม่มีเบอร์'}</span></div>
+                          <span className="text-[12px] bg-slate-100 text-slate-500 px-2 py-1 rounded-lg font-mono-code">{c.id}</span>
+                        </li>
+                      ))
+                    ) : (<li className="px-4 py-4 text-[14px] text-slate-400 text-center">ไม่พบข้อมูลลูกค้า (สามารถพิมพ์ชื่อใหม่ลงไปได้เลย)</li>)}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {formData.type === 'BUY' && (
+            <div className="bg-white border border-slate-200/60 rounded-[20px] p-4 sm:p-6 shadow-sm flex flex-col gap-5 shrink-0">
+              <div className="flex items-center gap-2 text-indigo-600 border-b border-slate-100 pb-3"><Lock className="w-5 h-5" /><h4 className="font-bold text-[16px]">จัดการโควตา</h4></div>
+              
+              <div className="space-y-2">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[13px] font-bold text-slate-600">วันที่โควตาที่ต้องการตัดยอด <span className="text-rose-500">*</span></label>
                   {!isViewOnly && (
                     <button type="button" onClick={handleAddQuotaDate} className={`text-[12px] font-bold px-3 py-1.5 rounded-full transition-colors flex items-center gap-1 ${shakeQuotaBtn ? 'bg-rose-100 text-rose-600 animate-shake' : 'bg-sky-100 text-sky-600 hover:bg-sky-200'}`}>
-                      <Plus className="w-3 h-3"/> เพิ่มวันที่โควตา
+                      <Plus className="w-3 h-3"/> เพิ่ม
                     </button>
                   )}
                 </div>
@@ -1561,7 +1697,7 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
                                 newDates[index] = e.target.value;
                                 setFormData(prev => ({...prev, quotaDates: newDates}));
                               }} 
-                              className="w-full h-[48px] pl-[42px] pr-4 bg-amber-50 border border-amber-200 rounded-[12px] text-[14px] font-bold text-amber-700 outline-none focus:border-amber-500 transition-all appearance-none cursor-pointer disabled:bg-slate-50 disabled:text-slate-500 disabled:border-slate-200 disabled:cursor-not-allowed"
+                              className="w-full h-[44px] pl-[42px] pr-4 bg-slate-50 border border-slate-200 rounded-[12px] text-[14px] font-bold text-slate-700 outline-none focus:border-sky-500 transition-all appearance-none cursor-pointer disabled:bg-slate-50 disabled:text-slate-500 disabled:border-slate-200 disabled:cursor-not-allowed"
                             >
                               { (() => {
                                 const lock = (lockData||[]).find(l => l.id === qIdOrDate);
@@ -1580,14 +1716,14 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
                                 );
                               })()}
                             </select>
-                            <CalendarClock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-amber-600/50 pointer-events-none" />
+                            <CalendarClock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                          </div>
                          {!isViewOnly && formData.quotaDates.length > 1 && (
                            <button type="button" onClick={() => {
                              const newDates = formData.quotaDates.filter((_, i) => i !== index);
                              setFormData(prev => ({...prev, quotaDates: newDates}));
-                           }} className="w-[48px] h-[48px] flex items-center justify-center rounded-[12px] bg-rose-50 text-rose-500 hover:bg-rose-100 transition-colors shrink-0">
-                             <Trash2 className="w-5 h-5" />
+                           }} className="w-[44px] h-[44px] flex items-center justify-center rounded-[12px] bg-rose-50 text-rose-500 hover:bg-rose-100 transition-colors shrink-0">
+                             <Trash2 className="w-4 h-4" />
                            </button>
                          )}
                       </div>
@@ -1595,126 +1731,73 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
                   })}
                 </div>
               </div>
-            )}
-          </div>
 
-          {/* กล่องสรุปการแบ่งโควตา (Real-time Preview - แบบกึ่งตาราง) */}
-          {formData.type === 'BUY' && (
-            <div className={`p-5 rounded-[24px] border-2 ${isAnyQuotaExceeded ? 'bg-rose-50 border-rose-200 shadow-[0_4px_12px_rgba(244,63,94,0.1)]' : 'bg-gradient-to-br from-slate-50 to-sky-50/50 border-sky-200 shadow-[0_4px_12px_rgba(14,165,233,0.08)]'} flex flex-col gap-4 shrink-0 transition-all`}>
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-200/60 pb-4">
-                 <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm ${isAnyQuotaExceeded ? 'bg-rose-100 text-rose-600' : 'bg-white text-sky-500'}`}>
-                       {isAnyQuotaExceeded ? <AlertTriangle className="w-5 h-5" /> : <BarChart3 className="w-5 h-5" />}
-                    </div>
-                    <span className={`text-[16px] font-bold ${isAnyQuotaExceeded ? 'text-rose-700' : 'text-slate-800'}`}>
-                       ภาพรวมการจัดสรรน้ำหนัก (ระบบคำนวณให้อัตโนมัติ)
-                    </span>
-                 </div>
-                 <div className="bg-white px-5 py-2 rounded-xl border border-slate-200 shadow-sm flex items-center gap-3">
-                    <span className="text-[14px] font-medium text-slate-500">น้ำหนักบิลรวม:</span>
-                    <span className="text-[18px] font-display font-bold text-slate-800">{(formData.items || []).reduce((sum, i) => sum + ((Number(i.quantity)||0) - (Number(i.deductWeight)||0)), 0).toLocaleString()} <span className="text-[14px] font-medium text-slate-500">กก.</span></span>
-                 </div>
-              </div>
-
-              <div className="flex flex-col gap-3">
-                 {/* Table Header (แสดงเฉพาะบน Desktop) */}
-                 <div className="hidden md:flex items-center px-4 pb-1 text-[13px] font-bold text-slate-500">
-                   <div className="w-[160px] shrink-0">วันที่อ้างอิงโควตา</div>
-                   <div className="flex-1 flex items-center justify-between text-center pl-6 md:gap-4">
-                      <div className="w-1/3">โควตาเดิม (กก.)</div>
-                      <div className="hidden md:flex items-center justify-center"><div className="w-6 lg:w-12"></div></div>
-                      <div className="w-1/3 text-sky-600">หักบิลนี้ (กก.)</div>
-                      <div className="hidden md:flex items-center justify-center"><div className="w-6"></div></div>
-                      <div className="w-1/3 text-emerald-600">คงเหลือ (กก.)</div>
+              {/* กล่องสรุปการแบ่งโควตา (Real-time Preview) */}
+              <div className={`p-4 sm:p-5 rounded-[16px] border ${isAnyQuotaExceeded ? 'bg-rose-50 border-rose-200' : 'bg-slate-50 border-slate-200'} flex flex-col gap-4 shrink-0 transition-all`}>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-200/60 pb-3">
+                   <div className="flex items-center gap-2">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center shadow-sm ${isAnyQuotaExceeded ? 'bg-rose-100 text-rose-600' : 'bg-white text-slate-600'}`}>
+                         {isAnyQuotaExceeded ? <AlertTriangle className="w-4 h-4" /> : <BarChart3 className="w-4 h-4" />}
+                      </div>
+                      <span className={`text-[14px] font-bold ${isAnyQuotaExceeded ? 'text-rose-700' : 'text-slate-700'}`}>
+                         สรุปการตัดยอด
+                      </span>
                    </div>
-                 </div>
-
-                 {allocations.map((alloc, idx) => (
-                    <div key={idx} className="bg-white rounded-[20px] p-4 border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col md:flex-row md:items-center gap-4 transition-colors hover:border-sky-300 hover:shadow-md">
-                       
-                       {/* Date Badge */}
-                       <div className="w-full md:w-[160px] shrink-0">
-                         <div className="bg-slate-50 border border-slate-200 px-4 py-2.5 rounded-xl flex items-center justify-center md:justify-start gap-2.5 w-full md:w-fit relative">
-                            <CalendarClock className="w-5 h-5 text-slate-400" />
-                            <span className="text-[15px] font-bold text-slate-700">{formatDateTh(alloc.date)}</span>
-                            {alloc.isAutoAssigned && (
-                               <span className="absolute -top-2 -right-2 bg-sky-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm border border-white">
-                                  Auto
-                               </span>
-                            )}
-                         </div>
-                       </div>
-                       
-                       {/* Flow calculation (แบ่ง 3 คอลัมน์เท่ากันเป๊ะ) */}
-                       <div className="flex-1 w-full flex items-center justify-between md:gap-4 relative pl-0 md:pl-6">
-                          
-                          {/* 1. Original */}
-                          <div className="w-1/3 flex flex-col items-center">
-                             <span className="md:hidden text-[12px] font-bold text-slate-400 mb-1">โควตาเดิม</span>
-                             <span className="text-[16px] md:text-[20px] font-mono-code font-bold text-slate-700">{alloc.capacity.toLocaleString()}</span>
-                          </div>
-                          
-                          <div className="hidden md:flex items-center justify-center text-slate-300">
-                             <div className="w-6 lg:w-12 h-[2px] bg-slate-200 rounded-full"></div>
-                          </div>
-                          
-                          {/* 2. Deduct */}
-                          <div className="w-1/3 flex flex-col items-center">
-                             <span className="md:hidden text-[12px] font-bold text-sky-500 mb-1">หักบิลนี้</span>
-                             <span className="text-[16px] md:text-[20px] font-mono-code font-bold text-sky-600">{alloc.allocated.toLocaleString()}</span>
-                          </div>
-                          
-                          <div className="hidden md:flex items-center justify-center text-slate-300">
-                             <ArrowDownCircle className="w-6 h-6 -rotate-90 text-slate-300" />
-                          </div>
-                          
-                          {/* 3. Remaining */}
-                          <div className="w-1/3 flex flex-col items-center">
-                             <span className="md:hidden text-[12px] font-bold text-slate-400 mb-1">คงเหลือ</span>
-                             <span className={`text-[16px] md:text-[20px] font-mono-code font-bold px-4 py-1.5 rounded-xl shadow-sm border ${alloc.resultingRemaining < 0 ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>
-                                {alloc.resultingRemaining.toLocaleString()}
-                             </span>
-                          </div>
-                       </div>
-                    </div>
-                 ))}
-              </div>
-
-              {isAnyQuotaExceeded && (
-                <div className="bg-rose-100/50 border border-rose-200 rounded-xl p-3.5 flex gap-3 items-start mt-2">
-                  <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
-                  <p className="text-[13px] md:text-[14px] text-rose-700 font-medium leading-relaxed">
-                    <span className="font-bold">ทะลุโควตา!</span> ระบบโควตาวันสุดท้ายจะติดลบ แต่สามารถบันทึกบิลเพื่อรับซื้อของหน้างานได้ตามปกติ (Soft Limit) ระบบจะนำไปหักลบอัตโนมัติเมื่อตั้งโควตาวันถัดไป
-                  </p>
+                   <div className="bg-white px-4 py-1.5 rounded-lg border border-slate-200 shadow-sm flex items-center gap-2 w-fit">
+                      <span className="text-[13px] font-medium text-slate-500">น้ำหนักบิลรวม:</span>
+                      <span className="text-[15px] font-bold text-slate-800">{(formData.items || []).reduce((sum, i) => sum + ((Number(i.quantity)||0) - (Number(i.deductWeight)||0)), 0).toLocaleString()} <span className="text-[12px] font-medium text-slate-500">กก.</span></span>
+                   </div>
                 </div>
-              )}
+
+                <div className="flex flex-col gap-2">
+                   {allocations.map((alloc, idx) => (
+                      <div key={idx} className="bg-white rounded-[12px] p-3 border border-slate-100 shadow-sm flex flex-col sm:flex-row sm:items-center gap-3">
+                         
+                         <div className="w-full sm:w-[140px] shrink-0">
+                           <div className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-2 w-fit relative">
+                              <CalendarClock className="w-4 h-4 text-slate-400" />
+                              <span className="text-[13px] font-bold text-slate-700">{formatDateTh(alloc.date)}</span>
+                           </div>
+                         </div>
+                         
+                         <div className="flex-1 w-full flex items-center justify-between gap-2 pl-0 sm:pl-4">
+                            <div className="flex flex-col items-center">
+                               <span className="text-[10px] font-bold text-slate-400 mb-0.5">โควตาเดิม</span>
+                               <span className="text-[14px] font-mono-code font-bold text-slate-600">{alloc.capacity.toLocaleString()}</span>
+                            </div>
+                            
+                            <div className="flex flex-col items-center">
+                               <span className="text-[10px] font-bold text-sky-500 mb-0.5">หักบิลนี้</span>
+                               <span className="text-[14px] font-mono-code font-bold text-sky-600">{alloc.allocated.toLocaleString()}</span>
+                            </div>
+                            
+                            <div className="flex flex-col items-center">
+                               <span className="text-[10px] font-bold text-slate-400 mb-0.5">คงเหลือ</span>
+                               <span className={`text-[14px] font-mono-code font-bold px-2 py-0.5 rounded-lg shadow-sm border ${alloc.resultingRemaining < 0 ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>
+                                  {alloc.resultingRemaining.toLocaleString()}
+                               </span>
+                            </div>
+                         </div>
+                      </div>
+                   ))}
+                </div>
+
+                {isAnyQuotaExceeded && (
+                  <div className="bg-rose-100/50 border border-rose-200 rounded-lg p-3 flex gap-2 items-start mt-1">
+                    <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                    <p className="text-[12px] text-rose-700 font-medium leading-relaxed">
+                      ทะลุโควตา! ระบบจะนำยอดติดลบไปหักอัตโนมัติในวันถัดไป
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
-          <div className="space-y-1.5 shrink-0" ref={customerRef}>
-            <label className="text-[13px] font-medium text-slate-500">ค้นหาลูกค้าอ้างอิง (HN, ชื่อ, เบอร์โทร) <span className="text-rose-500">*</span></label>
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-              <input disabled={isViewOnly} type="text" value={customerSearch} onChange={(e) => { setCustomerSearch(e.target.value); setIsCustomerDropdownOpen(true); if (e.target.value !== formData.customerName) setFormData({...formData, customerId: '', customerName: e.target.value}); }} onFocus={() => setIsCustomerDropdownOpen(true)} className="w-full h-[52px] pl-12 pr-4 bg-white border border-slate-200 rounded-[12px] text-[15px] text-slate-700 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all disabled:bg-slate-50 placeholder:text-slate-300" placeholder="พิมพ์ชื่อลูกค้า หรือเบอร์โทร..." />
-              {isCustomerDropdownOpen && !isViewOnly && (
-                <ul className="absolute z-50 w-full mt-2 bg-white border border-slate-100 rounded-[16px] shadow-[0_8px_30px_rgba(0,0,0,0.12)] max-h-60 overflow-y-auto py-2">
-                  {(customerData || []).filter(c => (c.name || '').toLowerCase().includes(customerSearch.toLowerCase()) || (c.phone || '').toLowerCase().includes(customerSearch.toLowerCase()) || (c.id || '').toLowerCase().includes(customerSearch.toLowerCase())).length > 0 ? (
-                    (customerData || []).filter(c => (c.name || '').toLowerCase().includes(customerSearch.toLowerCase()) || (c.phone || '').toLowerCase().includes(customerSearch.toLowerCase()) || (c.id || '').toLowerCase().includes(customerSearch.toLowerCase())).map(c => (
-                      <li key={c.id} onClick={() => { setFormData({...formData, customerId: c.id, customerName: c.name}); setCustomerSearch(c.name); setIsCustomerDropdownOpen(false); }} className="px-5 py-3 hover:bg-sky-50 cursor-pointer text-[14px] text-slate-700 border-b border-slate-50 flex items-center justify-between transition-colors">
-                        <div className="flex flex-col"><span className="font-bold text-slate-800">{c.name}</span><span className="text-[12px] text-slate-400 font-mono-code">{c.phone || 'ไม่มีเบอร์'}</span></div>
-                        <span className="text-[12px] bg-slate-100 text-slate-500 px-2 py-1 rounded-lg font-mono-code">{c.id}</span>
-                      </li>
-                    ))
-                  ) : (<li className="px-4 py-4 text-[14px] text-slate-400 text-center">ไม่พบข้อมูลลูกค้า (สามารถพิมพ์ชื่อใหม่ลงไปได้เลย)</li>)}
-                </ul>
-              )}
-            </div>
-          </div>
-
-          <div className="border border-slate-200 rounded-[20px] overflow-hidden flex flex-col shrink-0">
-            <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
-              <span className="font-bold text-[14px] text-slate-700">รายการสินค้า/รายละเอียด <span className="text-rose-500">*</span></span>
-              {!isViewOnly && <button onClick={handleAddItem} type="button" className="flex items-center gap-1.5 text-[13px] font-bold text-sky-600 bg-sky-100/50 hover:bg-sky-100 px-3 py-1.5 rounded-lg transition-colors"><Plus className="w-4 h-4" /> เพิ่มรายการ</button>}
+          <div className="bg-white border border-slate-200/60 rounded-[20px] overflow-hidden flex flex-col shrink-0 shadow-sm">
+            <div className="bg-slate-50/50 p-4 border-b border-slate-100 flex justify-between items-center">
+              <span className="font-bold text-[15px] text-slate-700 flex items-center gap-2"><LayoutList className="w-5 h-5 text-sky-500" /> รายการสินค้า <span className="text-rose-500">*</span></span>
+              {!isViewOnly && <button onClick={handleAddItem} type="button" className="flex items-center gap-1 text-[13px] font-bold text-sky-600 bg-sky-50 hover:bg-sky-100 px-3 py-1.5 rounded-lg transition-colors border border-sky-100"><Plus className="w-4 h-4" /> เพิ่มรายการ</button>}
             </div>
             <div className="p-4 space-y-3 bg-white">
               {(formData.items || []).length > 0 && (
@@ -1733,22 +1816,22 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
                 <div key={item.rowId} className="flex flex-col md:flex-row gap-3 items-start md:items-center relative bg-slate-50/50 p-3 rounded-xl border border-slate-100">
                   <div className="w-full md:flex-[2]">
                     <label className="block md:hidden text-[11px] font-bold text-slate-400 mb-1">รายการ</label>
-                    <select disabled={isViewOnly} value={item.productId} onChange={(e) => handleItemChange(item.rowId, 'productId', e.target.value)} className={`w-full h-[40px] px-3 bg-white border border-slate-200 rounded-[12px] text-[14px] outline-none focus:border-sky-500 transition-all disabled:bg-transparent ${dailyItems.length === 0 && !item.productId ? 'text-rose-500' : 'text-slate-700'}`}>
-                      {dailyItems.length > 0 ? <option value="">-- เลือกราคารับซื้อวันนี้ --</option> : <option value="">-- ไม่พบการตั้งราคาวันนี้ --</option>}
+                    <select disabled={isViewOnly} value={item.productId} onChange={(e) => handleItemChange(item.rowId, 'productId', e.target.value)} className={`w-full h-[44px] px-3 bg-white border border-slate-200 rounded-[10px] text-[14px] outline-none focus:border-sky-500 transition-all disabled:bg-transparent ${dailyItems.length === 0 && !item.productId ? 'text-rose-500' : 'text-slate-700'}`}>
+                      {dailyItems.length > 0 ? <option value="">-- เลือกรายการ --</option> : <option value="">-- ไม่มีข้อมูล --</option>}
                       {dailyItems.slice().sort((a, b) => (a.id || '').localeCompare(b.id || '')).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                       {item.productId && !dailyItems.some(p => p.id === item.productId) && <option value={item.productId}>{item.name || 'ข้อมูลเก่า'}</option>}
                     </select>
                   </div>
                   <div className="w-full md:flex-[1]">
                     <label className="block md:hidden text-[11px] font-bold text-slate-400 mb-1">จำนวน(kg)</label>
-                    <input disabled={isViewOnly} type="number" value={item.quantity} onChange={(e) => handleItemChange(item.rowId, 'quantity', e.target.value)} className="w-full h-[40px] px-3 bg-white border border-slate-200 rounded-[12px] text-[14px] text-center font-mono-code outline-none focus:border-sky-500 disabled:bg-transparent" placeholder="0" />
+                    <input disabled={isViewOnly} type="number" value={item.quantity} onChange={(e) => handleItemChange(item.rowId, 'quantity', e.target.value)} className="w-full h-[44px] px-3 bg-white border border-slate-200 rounded-[10px] text-[14px] text-center font-mono-code outline-none focus:border-sky-500 disabled:bg-transparent" placeholder="0" />
                   </div>
                   <div className="w-full md:flex-[1]">
                     <label className="block md:hidden text-[11px] font-bold text-slate-400 mb-1">หักน้ำหนัก</label>
-                    <input disabled={isViewOnly} type="number" value={item.deductWeight || ''} onChange={(e) => handleItemChange(item.rowId, 'deductWeight', e.target.value)} className="w-full h-[40px] px-3 bg-white border border-slate-200 rounded-[12px] text-[14px] text-center font-mono-code outline-none focus:border-sky-500 disabled:bg-transparent" placeholder="0" />
+                    <input disabled={isViewOnly} type="number" value={item.deductWeight || ''} onChange={(e) => handleItemChange(item.rowId, 'deductWeight', e.target.value)} className="w-full h-[44px] px-3 bg-white border border-slate-200 rounded-[10px] text-[14px] text-center font-mono-code outline-none focus:border-sky-500 disabled:bg-transparent" placeholder="0" />
                   </div>
-                  <div className="w-full md:flex-[1] flex items-center justify-center mt-2 md:mt-0">
-                    <label className="inline-block md:hidden text-[11px] font-bold text-slate-400 mr-2">น้ำหนักสุทธิ</label>
+                  <div className="w-full md:flex-[1] flex items-center justify-between md:justify-center bg-white md:bg-transparent p-2 md:p-0 rounded-[10px] border border-slate-100 md:border-none">
+                    <label className="inline-block md:hidden text-[12px] font-bold text-slate-400">น้ำหนักสุทธิ</label>
                     <span className="font-mono-code font-bold text-[15px] text-sky-600">
                        {((Number(item.quantity) || 0) - (Number(item.deductWeight) || 0)).toLocaleString()}
                     </span>
@@ -1765,40 +1848,45 @@ function GlobalBillModal({ config, onClose, setIsLoading, setLoadingMsg, addToas
                           e.preventDefault(); const prevInput = document.getElementById(`price-input-${index - 1}`); if (prevInput) { prevInput.focus(); prevInput.select(); }
                         }
                       }}
-                      className="w-full h-[40px] px-3 bg-white border border-slate-200 rounded-[12px] text-[14px] text-right font-mono-code outline-none focus:border-sky-500 disabled:bg-transparent" placeholder="0.00" 
+                      className="w-full h-[44px] px-3 bg-white border border-slate-200 rounded-[10px] text-[14px] text-right font-mono-code outline-none focus:border-sky-500 disabled:bg-transparent" placeholder="0.00" 
                     />
                   </div>
-                  <div className="w-full md:flex-[1] text-right md:text-center mt-2 md:mt-0">
-                    <label className="inline-block md:hidden text-[11px] font-bold text-slate-400 mr-2">รวม</label>
+                  <div className="w-full md:flex-[1] flex items-center justify-between md:justify-center bg-slate-100 md:bg-transparent p-2 md:p-0 rounded-[10px]">
+                    <label className="inline-block md:hidden text-[12px] font-bold text-slate-500">รวม</label>
                     <span className="font-mono-code font-bold text-[16px] text-slate-800">{(((Number(item.quantity) || 0) - (Number(item.deductWeight) || 0)) * (Number(item.price) || 0)).toLocaleString()}</span>
                   </div>
-                  {!isViewOnly && <button tabIndex="-1" onClick={() => handleRemoveItem(item.rowId)} className="absolute -top-2 -right-2 md:static md:w-auto p-1.5 bg-white md:bg-transparent border border-slate-200 md:border-none rounded-full text-slate-300 hover:text-rose-500 shadow-sm md:shadow-none"><Trash2 className="w-4 h-4" /></button>}
+                  {!isViewOnly && <button tabIndex="-1" onClick={() => handleRemoveItem(item.rowId)} className="absolute -top-2 -right-2 md:static md:w-auto p-1.5 bg-white md:bg-transparent border border-slate-200 md:border-none rounded-full text-slate-300 hover:bg-rose-50 hover:text-rose-500 shadow-sm md:shadow-none transition-colors"><Trash2 className="w-4 h-4" /></button>}
                 </div>
               ))}
-              {(formData.items || []).length === 0 && <div className="text-center text-[13px] text-slate-400 py-4">ยังไม่มีรายการสินค้า กดปุ่ม + เพิ่มรายการ</div>}
+              {(formData.items || []).length === 0 && <div className="text-center text-[13px] text-slate-400 py-6">ยังไม่มีรายการสินค้า กดปุ่ม + เพิ่มรายการ</div>}
             </div>
           </div>
 
-          <div className="flex flex-col md:flex-row gap-6 items-end shrink-0 pt-2">
+          <div className="bg-white border border-slate-200/60 rounded-[20px] p-4 sm:p-6 shadow-sm flex flex-col md:flex-row gap-5 items-end shrink-0">
             <div className="w-full flex-1 space-y-1.5">
-              <label className="text-[13px] font-medium text-slate-500">ช่องความทรงจำ (Note) <span className="text-rose-500">*</span></label>
+              <label className="text-[13px] font-medium text-slate-500">ช่องความทรงจำ (Note)</label>
               <textarea disabled={isViewOnly} value={formData.note} onChange={(e) => setFormData({...formData, note: e.target.value})} className="w-full h-[80px] p-4 bg-slate-50 border border-slate-200 rounded-[16px] text-[14px] outline-none resize-none focus:border-sky-500 transition-all disabled:bg-transparent" placeholder="ระบุหมายเหตุ เช่น ทะเบียนรถ, ผู้รับเงิน..." />
             </div>
-            <div className="w-full md:w-[300px] bg-slate-50 p-5 rounded-[20px] flex items-center justify-between border border-slate-100">
-              <span className="font-bold text-[16px] text-slate-500">รวมเป็นเงิน</span>
-              <span className="font-display font-bold text-[32px] text-slate-800 leading-none">{(formData.grandTotal || 0).toLocaleString()}</span>
+            <div className="w-full md:w-[280px] bg-gradient-to-br from-sky-500 to-sky-600 p-4 rounded-[16px] flex flex-col justify-center items-end shadow-lg shadow-sky-500/30 text-white relative overflow-hidden">
+              <div className="absolute -right-4 -top-4 w-24 h-24 bg-white opacity-10 rounded-full blur-xl pointer-events-none"></div>
+              <span className="font-medium text-[13px] text-sky-100 mb-1 z-10">รวมเป็นเงินสุทธิ</span>
+              <span className="font-display font-bold text-[36px] leading-none text-white z-10">{(formData.grandTotal || 0).toLocaleString()}</span>
             </div>
           </div>
         </div>
 
-        <div className="px-6 py-4 bg-white border-t border-slate-100 flex justify-between gap-3 shrink-0">
-          <div className="flex gap-3">
-             {isViewOnly && <button type="button" onClick={handlePrint} className="h-[48px] px-8 text-[15px] font-medium text-white bg-sky-500 rounded-xl hover:bg-sky-600 transition-colors active:scale-95 flex items-center gap-2 shadow-[0_4px_12px_rgba(14,165,233,0.25)]"><Printer className="w-5 h-5" /> พิมพ์ใบเสร็จ</button>}
-          </div>
-          <div className="flex gap-3">
-            <button onClick={onClose} className="h-[48px] px-8 text-[15px] font-medium text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors active:scale-95">{isViewOnly ? 'ปิด' : 'ยกเลิก'}</button>
-            {!isViewOnly && <button onClick={handleSave} className="h-[48px] px-8 text-[15px] font-medium text-white bg-sky-500 rounded-xl hover:bg-sky-600 transition-colors active:scale-95 flex items-center gap-2 shadow-[0_4px_12px_rgba(14,165,233,0.25)]"><CheckCircle className="w-5 h-5" /> บันทึกรายการ</button>}
-          </div>
+        <div className="px-4 sm:px-6 py-4 bg-white border-t border-slate-100 flex flex-col sm:flex-row justify-between gap-3 shrink-0">
+          {isViewOnly ? (
+             <div className="flex flex-row gap-3 w-full sm:w-auto sm:justify-end sm:ml-auto">
+               <button onClick={onClose} className="flex-1 sm:flex-none h-[48px] px-4 sm:px-8 text-[14px] sm:text-[15px] font-medium text-slate-600 bg-slate-50 sm:bg-white border border-slate-200 rounded-xl hover:bg-slate-100 sm:hover:bg-slate-50 transition-colors active:scale-95 whitespace-nowrap">ปิดหน้าต่าง</button>
+               <button type="button" onClick={handlePrint} className="flex-1 sm:flex-none h-[48px] px-4 sm:px-8 text-[14px] sm:text-[15px] font-medium text-white bg-sky-500 rounded-xl hover:bg-sky-600 transition-colors active:scale-95 flex items-center justify-center gap-2 shadow-[0_4px_12px_rgba(14,165,233,0.25)] whitespace-nowrap"><Printer className="w-5 h-5" /> พิมพ์ใบเสร็จ</button>
+             </div>
+          ) : (
+             <div className="flex flex-row gap-3 w-full sm:justify-end">
+               <button onClick={onClose} className="flex-1 sm:flex-none h-[48px] px-4 sm:px-8 text-[14px] sm:text-[15px] font-medium text-slate-600 bg-slate-50 sm:bg-white border border-slate-200 rounded-xl hover:bg-slate-100 sm:hover:bg-slate-50 transition-colors active:scale-95 whitespace-nowrap">ยกเลิก</button>
+               <button onClick={handleSave} className="flex-1 sm:flex-none h-[48px] px-4 sm:px-8 text-[14px] sm:text-[15px] font-medium text-white bg-sky-500 rounded-xl hover:bg-sky-600 transition-colors active:scale-95 flex items-center justify-center gap-2 shadow-[0_4px_12px_rgba(14,165,233,0.25)] whitespace-nowrap"><CheckCircle className="w-5 h-5 shrink-0 hidden sm:block" /> บันทึกรายการ</button>
+             </div>
+          )}
         </div>
       </div>
     </div>
@@ -1815,6 +1903,7 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const isLoadingMoreRef = useRef(false); 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const { shouldRender: shouldRenderModal, isAnimatingOut: isAnimatingOutModal } = useModalAnimation(isModalOpen);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({ id: '', date: '', items: [], note: '' });
   const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, id: null });
@@ -1933,7 +2022,7 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
 
   const handleDelete = async () => {
     const idToDelete = confirmDelete.id;
-    setConfirmDelete({ isOpen: false, id: null });
+    setConfirmDelete(prev => ({ ...prev, isOpen: false }));
     setLoadingMsg('กำลังลบข้อมูลราคา...');
     setIsLoading(true);
     const response = await requestAPI('DELETE_DATA', 'DailyPrices', { id: idToDelete });
@@ -2086,9 +2175,9 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
             }}
             renderActions={(entry) => (
               <>
+                <button onClick={() => setConfirmDelete({ isOpen: true, id: entry.id })} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-xs"><Trash2 className="w-4 h-4" /> ลบ</button>
                 <button onClick={() => openModal(entry, true)} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-xl transition-colors font-medium text-xs"><Info className="w-4 h-4" /> ดูข้อมูล</button>
                 <button onClick={() => openModal(entry, false)} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs"><Edit className="w-4 h-4" /> แก้ไข</button>
-                <button onClick={() => setConfirmDelete({ isOpen: true, id: entry.id })} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-xs"><Trash2 className="w-4 h-4" /> ลบ</button>
               </>
             )}
           />
@@ -2096,56 +2185,66 @@ function DailyPriceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, d
         </div>
       </div>
 
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[24px] w-full max-w-5xl shadow-2xl flex flex-col h-[95vh] overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="px-6 py-4 flex justify-between items-center bg-white border-b border-slate-100 shrink-0">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center">
-                  {isViewOnly ? <Info className="w-6 h-6" /> : <Tag className="w-6 h-6" />}
+      {shouldRenderModal && (
+        <div className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[120] flex items-center justify-center p-3 sm:p-4 font-body ${isAnimatingOutModal ? 'backdrop-animate-out' : 'backdrop-animate-in'}`}>
+          <div className={`bg-white w-full max-w-5xl shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[90vh] rounded-[20px] sm:rounded-[24px] overflow-hidden ${isAnimatingOutModal ? 'modal-animate-out' : 'modal-animate-in'}`}>
+            <div className="px-4 sm:px-6 py-4 flex justify-between items-center bg-white border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center shrink-0">
+                  {isViewOnly ? <Info className="w-5 h-5 sm:w-6 sm:h-6" /> : <Tag className="w-5 h-5 sm:w-6 sm:h-6" />}
                 </div>
                 <div>
-                  <h3 className="font-display text-[20px] font-bold text-slate-800 leading-tight">{isViewOnly ? 'รายละเอียดการตั้งราคารายวัน' : (editingId ? 'แก้ไขข้อมูลราคารายวัน' : 'ตั้งค่าราคารับซื้อรายวัน')}</h3>
-                  <p className="text-[13px] text-slate-500">{isViewOnly ? 'ประวัติราคาของวันที่เลือก' : 'เพิ่มรายการสินค้าที่จะอัปเดตราคาในวันนี้'}</p>
+                  <h3 className="font-display text-[18px] sm:text-[20px] font-bold text-slate-800 leading-tight">{isViewOnly ? 'รายละเอียดการตั้งราคา' : (editingId ? 'แก้ไขข้อมูลราคา' : 'ตั้งค่าราคาประจำวัน')}</h3>
+                  <p className="text-[12px] sm:text-[13px] text-slate-500">{isViewOnly ? 'ดูประวัติการอัปเดตราคาของวันที่เลือก' : 'อัปเดตรายการสินค้าที่จะปรับราคาในวันนี้'}</p>
                 </div>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-full border border-slate-200 text-slate-400 hover:bg-slate-50 transition-colors"><X className="w-5 h-5" /></button>
+              <button onClick={() => setIsModalOpen(false)} className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full border border-slate-200 text-slate-400 hover:bg-slate-50 transition-colors shrink-0"><X className="w-4 h-4 sm:w-5 sm:h-5" /></button>
             </div>
-            <div className="p-6 overflow-y-auto bg-slate-50/50 space-y-5 flex-1 flex flex-col">
-              <div className="flex flex-col md:flex-row gap-4 shrink-0">
-                <div className="flex-1 space-y-1.5">
-                  <label className="text-[13px] font-medium text-slate-600">วันที่ <span className="text-rose-500">*</span></label>
-                  <div className="relative">
-                    <input disabled={isViewOnly} type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="w-full h-[40px] pl-3 pr-9 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50 disabled:text-slate-500" />
-                    <CalendarClock className="absolute right-3 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-sky-500 pointer-events-none opacity-80" />
+            <div className="p-4 sm:p-6 overflow-y-auto bg-slate-50/50 space-y-4 sm:space-y-6 flex-1 flex flex-col">
+              <div className="bg-white border border-slate-200/60 rounded-[20px] p-4 sm:p-6 shadow-sm flex flex-col gap-4 sm:gap-5 shrink-0">
+                <div className="flex items-center gap-2 text-sky-600 border-b border-slate-100 pb-3"><Info className="w-5 h-5" /><h4 className="font-bold text-[16px]">ข้อมูลทั่วไป</h4></div>
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex-1 space-y-1.5">
+                    <label className="text-[13px] font-medium text-slate-600">วันที่ <span className="text-rose-500">*</span></label>
+                    <div className="relative">
+                      <input disabled={isViewOnly} type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="w-full h-[44px] pl-3 pr-9 bg-slate-50 border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50 disabled:text-slate-500" />
+                      <CalendarClock className="absolute right-3 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-sky-500 pointer-events-none opacity-80" />
+                    </div>
+                  </div>
+                  <div className="flex-[3] space-y-1.5">
+                    <label className="text-[13px] font-medium text-slate-600">หมายเหตุ</label>
+                    <input disabled={isViewOnly} type="text" value={formData.note || ''} onChange={(e) => setFormData({...formData, note: e.target.value})} className="w-full h-[44px] px-4 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50 disabled:text-slate-500" placeholder="ใส่หมายเหตุ (ถ้ามี)" />
                   </div>
                 </div>
-                <div className="flex-[3] space-y-1.5">
-                  <label className="text-[13px] font-medium text-slate-600">หมายเหตุ</label>
-                  <input disabled={isViewOnly} type="text" value={formData.note || ''} onChange={(e) => setFormData({...formData, note: e.target.value})} className="w-full h-[40px] px-3 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50 disabled:text-slate-500" placeholder="ใส่หมายเหตุ (ถ้ามี)" />
-                </div>
               </div>
 
-              <SharedProductPriceTable
-                items={formData.items}
-                productData={productData}
-                isViewOnly={isViewOnly}
-                priceField="todayPrice"
-                priceColumnLabel="ราคารับซื้อวันนี้ (บาท)"
-                onAddItem={handleAddItem}
-                onRemoveItem={handleRemoveItem}
-                onPriceChange={handlePriceChange}
-              />
+              <div className="bg-white border border-slate-200/60 rounded-[20px] shadow-sm flex flex-col shrink-0 overflow-hidden">
+                <div className="bg-slate-50/50 p-4 border-b border-slate-100 flex items-center gap-2 text-slate-700"><LayoutList className="w-5 h-5 text-sky-500" /><h4 className="font-bold text-[15px]">รายการสินค้าปรับราคา</h4></div>
+                <div className="p-4 sm:p-6">
+                  <SharedProductPriceTable
+                    items={formData.items}
+                    productData={productData}
+                    isViewOnly={isViewOnly}
+                    priceField="todayPrice"
+                    priceColumnLabel="ราคารับซื้อวันนี้ (บาท)"
+                    onAddItem={handleAddItem}
+                    onRemoveItem={handleRemoveItem}
+                    onPriceChange={handlePriceChange}
+                  />
+                </div>
+              </div>
             </div>
 
-            <div className="px-6 py-4 bg-white border-t border-slate-100 flex justify-end gap-3 shrink-0">
-              <button onClick={() => setIsModalOpen(false)} className="h-[44px] px-6 text-[14px] font-medium text-slate-600 bg-white border border-slate-200 rounded-[12px] hover:bg-slate-50 transition-colors active:scale-95">{isViewOnly ? 'ปิดหน้าต่าง' : 'ยกเลิก'}</button>
-              {!isViewOnly && <button onClick={handleSave} className="h-[44px] px-6 text-[14px] font-medium text-white bg-sky-500 rounded-[12px] hover:bg-sky-600 transition-colors active:scale-95 flex items-center gap-2 shadow-[0_4px_12px_rgba(14,165,233,0.25)]"><Save className="w-4 h-4" /> ยืนยันบันทึกประจำวัน</button>}
+            <div className="px-4 sm:px-6 py-4 bg-white border-t border-slate-100 flex flex-col sm:flex-row justify-between gap-3 shrink-0">
+              <div className="flex flex-row gap-3 w-full sm:w-auto sm:justify-end sm:ml-auto">
+                <button onClick={() => setIsModalOpen(false)} className="flex-1 sm:flex-none h-[48px] px-4 sm:px-8 text-[14px] sm:text-[15px] font-medium text-slate-600 bg-slate-50 sm:bg-white border border-slate-200 rounded-xl hover:bg-slate-100 sm:hover:bg-slate-50 transition-colors active:scale-95 whitespace-nowrap">{isViewOnly ? 'ปิดหน้าต่าง' : 'ยกเลิก'}</button>
+                {!isViewOnly && <button onClick={handleSave} className="flex-1 sm:flex-none h-[48px] px-4 sm:px-8 text-[14px] sm:text-[15px] font-medium text-white bg-sky-500 rounded-xl hover:bg-sky-600 transition-colors active:scale-95 flex items-center justify-center gap-2 shadow-[0_4px_12px_rgba(14,165,233,0.25)] whitespace-nowrap"><Save className="w-5 h-5 shrink-0" /> <span className="hidden sm:inline">ยืนยันบันทึกประจำวัน</span><span className="sm:hidden">บันทึก</span></button>}
+              </div>
             </div>
           </div>
         </div>
       )}
-      <ConfirmAlert isOpen={confirmDelete.isOpen} onCancel={() => setConfirmDelete({ isOpen: false, id: null })} onConfirm={handleDelete} title="ยืนยันลบ" text="ต้องการลบประวัติการตั้งราคานี้ใช่ไหม" />
+      <ConfirmAlert isOpen={confirmDelete.isOpen} onCancel={() => setConfirmDelete(prev => ({ ...prev, isOpen: false }))} onConfirm={handleDelete} title="ยืนยันลบ" text="ต้องการลบประวัติการตั้งราคานี้ใช่ไหม" />
     </div>
   );
 }
@@ -2160,6 +2259,7 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const isLoadingMoreRef = useRef(false); 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const { shouldRender: shouldRenderModal, isAnimatingOut: isAnimatingOutModal } = useModalAnimation(isModalOpen);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({ id: '', date: '', dailyLimitKg: '', dailyLimitUnit: 'Kg.', note: '', items: [] });
   const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, id: null, data: [] });
@@ -2394,7 +2494,7 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
 
   const handleDelete = async () => {
     const idToDelete = confirmDelete.id;
-    setConfirmDelete({ isOpen: false, id: null });
+    setConfirmDelete(prev => ({ ...prev, isOpen: false }));
     setLoadingMsg('กำลังลบโควตาและเคลียร์ข้อมูลที่เกี่ยวข้อง...');
     setIsLoading(true);
     
@@ -2767,8 +2867,6 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
             }}
             renderActions={(lock) => (
               <>
-                <button onClick={() => openModal(lock, true)} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-xl transition-colors font-medium text-xs"><Info className="w-4 h-4" /> ดูข้อมูล</button>
-                <button onClick={() => openModal(lock, false)} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs"><Edit className="w-4 h-4" /> แก้ไข</button>
                 <button onClick={() => {
                   const associatedStocks = (stockData || []).filter(s => {
                      if (s.quotaId === lock.id) return true;
@@ -2783,6 +2881,8 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
                   });
                   setConfirmDelete({ isOpen: true, id: lock.id, data: associatedStocks });
                 }} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-xs"><Trash2 className="w-4 h-4" /> ลบ</button>
+                <button onClick={() => openModal(lock, true)} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-xl transition-colors font-medium text-xs"><Info className="w-4 h-4" /> ดูข้อมูล</button>
+                <button onClick={() => openModal(lock, false)} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs"><Edit className="w-4 h-4" /> แก้ไข</button>
               </>
             )}
           />
@@ -2790,34 +2890,37 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
         </div>
       </div>
 
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[24px] w-full max-w-5xl shadow-2xl flex flex-col h-[95vh] overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="px-6 py-4 flex justify-between items-center bg-white border-b border-slate-100 shrink-0">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-sky-50 text-sky-500 flex items-center justify-center">
-                  {isViewOnly ? <Info className="w-6 h-6" /> : <Scale className="w-6 h-6" />}
+      {shouldRenderModal && (
+        <div className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[120] flex items-center justify-center p-3 sm:p-4 font-body ${isAnimatingOutModal ? 'backdrop-animate-out' : 'backdrop-animate-in'}`}>
+          <div className={`bg-white w-full max-w-5xl shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[90vh] rounded-[20px] sm:rounded-[24px] overflow-hidden ${isAnimatingOutModal ? 'modal-animate-out' : 'modal-animate-in'}`}>
+            <div className="px-4 sm:px-6 py-4 flex justify-between items-center bg-white border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-sky-50 text-sky-500 flex items-center justify-center shrink-0">
+                  {isViewOnly ? <Info className="w-5 h-5 sm:w-6 sm:h-6" /> : <Scale className="w-5 h-5 sm:w-6 sm:h-6" />}
                 </div>
                 <div>
-                  <h3 className="font-display text-[20px] font-bold text-slate-800 leading-tight">{isViewOnly ? 'รายละเอียดการตั้งค่าโควตา' : (editingId ? 'แก้ไขข้อมูลโควตา' : 'ตั้งค่าล็อกโควตาน้ำหนักรายวัน')}</h3>
-                  <p className="text-[13px] text-slate-500">{isViewOnly ? 'ประวัติโควตารับซื้อของวันที่เลือก' : 'กำหนดโควตาและตรวจสอบบิลการรับซื้อในวันนี้'}</p>
+                  <h3 className="font-display text-[18px] sm:text-[20px] font-bold text-slate-800 leading-tight">{isViewOnly ? 'รายละเอียดการตั้งค่าโควตา' : (editingId ? 'แก้ไขข้อมูลโควตา' : 'ตั้งค่าล็อกโควตาน้ำหนักรายวัน')}</h3>
+                  <p className="text-[12px] sm:text-[13px] text-slate-500">{isViewOnly ? 'ประวัติโควตารับซื้อของวันที่เลือก' : 'กำหนดโควตาและตรวจสอบบิลการรับซื้อในวันนี้'}</p>
                 </div>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-full border border-slate-200 text-slate-400 hover:bg-slate-50 transition-colors"><X className="w-5 h-5" /></button>
+              <button onClick={() => setIsModalOpen(false)} className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full border border-slate-200 text-slate-400 hover:bg-slate-50 transition-colors shrink-0"><X className="w-4 h-4 sm:w-5 sm:h-5" /></button>
             </div>
             
-            <div className="p-6 overflow-y-auto bg-slate-50/50 space-y-5 flex-1 flex flex-col">
-              <div className="flex flex-col md:flex-row gap-4 shrink-0">
-                <div className="flex-1 space-y-1.5">
-                  <label className="text-[13px] font-medium text-slate-600">วันที่ <span className="text-rose-500">*</span></label>
-                  <div className="relative">
-                    <input disabled={isViewOnly} type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="w-full h-[40px] pl-3 pr-9 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50 disabled:text-slate-500" />
-                    <CalendarClock className="absolute right-3 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-sky-500 pointer-events-none opacity-80" />
+            <div className="p-4 sm:p-6 overflow-y-auto bg-slate-50/50 space-y-4 sm:space-y-6 flex-1 flex flex-col">
+              <div className="bg-white border border-slate-200/60 rounded-[20px] p-4 sm:p-6 shadow-sm flex flex-col gap-4 sm:gap-5 shrink-0">
+                <div className="flex items-center gap-2 text-sky-600 border-b border-slate-100 pb-3"><Info className="w-5 h-5" /><h4 className="font-bold text-[16px]">ข้อมูลทั่วไป</h4></div>
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex-1 space-y-1.5">
+                    <label className="text-[13px] font-medium text-slate-600">วันที่ <span className="text-rose-500">*</span></label>
+                    <div className="relative">
+                      <input disabled={isViewOnly} type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="w-full h-[44px] pl-3 pr-9 bg-slate-50 border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50 disabled:text-slate-500" />
+                      <CalendarClock className="absolute right-3 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-sky-500 pointer-events-none opacity-80" />
+                    </div>
                   </div>
-                </div>
-                <div className="flex-[3] space-y-1.5">
-                  <label className="text-[13px] font-medium text-slate-600">หมายเหตุ</label>
-                  <input disabled={isViewOnly} type="text" value={formData.note || ''} onChange={(e) => setFormData({...formData, note: e.target.value})} className="w-full h-[40px] px-3 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50 disabled:text-slate-500" placeholder="ใส่หมายเหตุ (ถ้ามี)" />
+                  <div className="flex-[3] space-y-1.5">
+                    <label className="text-[13px] font-medium text-slate-600">หมายเหตุ</label>
+                    <input disabled={isViewOnly} type="text" value={formData.note || ''} onChange={(e) => setFormData({...formData, note: e.target.value})} className="w-full h-[44px] px-4 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50 disabled:text-slate-500" placeholder="ใส่หมายเหตุ (ถ้ามี)" />
+                  </div>
                 </div>
               </div>
 
@@ -2825,13 +2928,13 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
                 <div className="bg-[#0ea5e9] p-6 rounded-[24px] shadow-[0_8px_24px_rgba(14,165,233,0.3)] flex flex-col gap-4 text-white md:col-span-2 relative overflow-hidden">
                   <div className="absolute right-0 top-0 opacity-10 transform translate-x-1/4 -translate-y-1/4 pointer-events-none"><Scale className="w-48 h-48" /></div>
                   <div className="flex items-center gap-2 text-[15px] font-medium text-sky-50 z-10"><Lock className="w-4 h-4"/> โควตารับซื้อรวมวันนี้</div>
-                  <div className="flex items-center gap-3 z-10">
-                    <div className="flex items-center bg-white/20 border border-white/30 rounded-[12px] backdrop-blur-md overflow-hidden h-[56px] w-full md:w-[320px] shadow-inner">
-                      <button type="button" disabled={isViewOnly} onClick={() => setFormData({ ...formData, dailyLimitKg: String(Math.max(0, (Number(formData.dailyLimitKg) || 0) - 100)) })} className="w-[64px] h-full flex items-center justify-center text-white hover:bg-white/20 active:bg-white/30 transition-colors disabled:opacity-50 border-r border-white/20"><Minus className="w-6 h-6" /></button>
-                      <input disabled={isViewOnly} type="number" value={formData.dailyLimitKg} onChange={(e) => setFormData({...formData, dailyLimitKg: e.target.value})} className="flex-1 w-full h-full px-2 bg-transparent font-display font-bold text-[32px] text-white text-center outline-none placeholder:text-white/40 disabled:opacity-100 disabled:text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" placeholder="5000" />
-                      <button type="button" disabled={isViewOnly} onClick={() => setFormData({ ...formData, dailyLimitKg: String((Number(formData.dailyLimitKg) || 0) + 100) })} className="w-[64px] h-full flex items-center justify-center text-white hover:bg-white/20 active:bg-white/30 transition-colors disabled:opacity-50 border-l border-white/20"><Plus className="w-6 h-6" /></button>
+                  <div className="flex items-center gap-2 sm:gap-3 z-10">
+                    <div className="flex items-center bg-white/20 border border-white/30 rounded-[12px] backdrop-blur-md overflow-hidden h-[48px] sm:h-[56px] flex-1 md:flex-none md:w-[320px] shadow-inner">
+                      <button type="button" disabled={isViewOnly} onClick={() => setFormData({ ...formData, dailyLimitKg: String(Math.max(0, (Number(formData.dailyLimitKg) || 0) - 100)) })} className="w-[44px] sm:w-[64px] shrink-0 h-full flex items-center justify-center text-white hover:bg-white/20 active:bg-white/30 transition-colors disabled:opacity-50 border-r border-white/20"><Minus className="w-5 h-5 sm:w-6 sm:h-6" /></button>
+                      <input disabled={isViewOnly} type="number" value={formData.dailyLimitKg} onChange={(e) => setFormData({...formData, dailyLimitKg: e.target.value})} className="flex-1 w-full min-w-0 h-full px-1 sm:px-2 bg-transparent font-display font-bold text-[24px] sm:text-[32px] text-white text-center outline-none placeholder:text-white/40 disabled:opacity-100 disabled:text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" placeholder="5000" />
+                      <button type="button" disabled={isViewOnly} onClick={() => setFormData({ ...formData, dailyLimitKg: String((Number(formData.dailyLimitKg) || 0) + 100) })} className="w-[44px] sm:w-[64px] shrink-0 h-full flex items-center justify-center text-white hover:bg-white/20 active:bg-white/30 transition-colors disabled:opacity-50 border-l border-white/20"><Plus className="w-5 h-5 sm:w-6 sm:h-6" /></button>
                     </div>
-                    <select disabled={isViewOnly} value={formData.dailyLimitUnit || 'Kg.'} onChange={(e) => setFormData({...formData, dailyLimitUnit: e.target.value})} className="bg-transparent text-[18px] font-medium text-sky-100 outline-none cursor-pointer hover:text-white transition-colors disabled:opacity-100 disabled:text-white disabled:cursor-not-allowed [&>option]:text-slate-800">
+                    <select disabled={isViewOnly} value={formData.dailyLimitUnit || 'Kg.'} onChange={(e) => setFormData({...formData, dailyLimitUnit: e.target.value})} className="bg-transparent text-[16px] sm:text-[18px] font-medium text-sky-100 outline-none cursor-pointer hover:text-white transition-colors disabled:opacity-100 disabled:text-white disabled:cursor-not-allowed [&>option]:text-slate-800 shrink-0">
                       <option value="Kg.">Kg.</option><option value="ตัน">ตัน</option><option value="กรัม">กรัม</option>
                     </select>
                   </div>
@@ -2924,14 +3027,16 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
               />
             </div>
 
-            <div className="px-6 py-4 bg-white border-t border-slate-100 flex justify-end gap-3 shrink-0">
-              <button onClick={() => setIsModalOpen(false)} className="h-[44px] px-6 text-[14px] font-medium text-slate-600 bg-white border border-slate-200 rounded-[12px] hover:bg-slate-50 transition-colors active:scale-95">{isViewOnly ? 'ปิดหน้าต่าง' : 'ยกเลิก'}</button>
-              {!isViewOnly && <button onClick={handleSave} className="h-[44px] px-6 text-[14px] font-medium text-white bg-sky-500 rounded-[12px] hover:bg-sky-600 transition-colors active:scale-95 flex items-center gap-2 shadow-[0_4px_12px_rgba(14,165,233,0.25)]"><Save className="w-4 h-4" /> ยืนยันบันทึกโควตา</button>}
+            <div className="px-4 sm:px-6 py-4 bg-white border-t border-slate-100 flex flex-col sm:flex-row justify-between gap-3 shrink-0">
+              <div className="flex flex-row gap-3 w-full sm:w-auto sm:justify-end sm:ml-auto">
+                <button onClick={() => setIsModalOpen(false)} className="flex-1 sm:flex-none h-[48px] px-4 sm:px-8 text-[14px] sm:text-[15px] font-medium text-slate-600 bg-slate-50 sm:bg-white border border-slate-200 rounded-xl hover:bg-slate-100 sm:hover:bg-slate-50 transition-colors active:scale-95 whitespace-nowrap">{isViewOnly ? 'ปิดหน้าต่าง' : 'ยกเลิก'}</button>
+                {!isViewOnly && <button onClick={handleSave} className="flex-1 sm:flex-none h-[48px] px-4 sm:px-8 text-[14px] sm:text-[15px] font-medium text-white bg-sky-500 rounded-xl hover:bg-sky-600 transition-colors active:scale-95 flex items-center justify-center gap-2 shadow-[0_4px_12px_rgba(14,165,233,0.25)] whitespace-nowrap"><Save className="w-5 h-5 shrink-0 hidden sm:block" /> ยืนยันบันทึกโควตา</button>}
+              </div>
             </div>
           </div>
         </div>
       )}
-      <ConfirmAlert isOpen={confirmDelete.isOpen} onCancel={() => setConfirmDelete({ isOpen: false, id: null, data: [] })} onConfirm={handleDelete} title="ยืนยันลบ" text="ต้องการลบประวัติการตั้งโควตานี้ใช่ไหม">
+      <ConfirmAlert isOpen={confirmDelete.isOpen} onCancel={() => setConfirmDelete(prev => ({ ...prev, isOpen: false }))} onConfirm={handleDelete} title="ยืนยันลบ" text="ต้องการลบประวัติการตั้งโควตานี้ใช่ไหม">
         {confirmDelete.data && confirmDelete.data.length > 0 && (
           <ImpactAnalysisTable items={confirmDelete.data.map(item => {
                 const qty = Number(item.quantity) || 0;
@@ -2950,7 +3055,7 @@ function LockWeightModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, l
         )}
       </ConfirmAlert>
 
-      <ConfirmAlert isOpen={confirmEdit.isOpen} onCancel={() => setConfirmEdit({ isOpen: false, data: [] })} onConfirm={() => { setConfirmEdit({ isOpen: false, data: [] }); executeSave(); }} title="ยืนยันการแก้ไขข้อมูลโควตา" text="รายการเหล่านี้มีการผูกข้อมูลไว้ หากบันทึกการเปลี่ยนแปลงจะส่งผลกระทบดังนี้">
+      <ConfirmAlert isOpen={confirmEdit.isOpen} onCancel={() => setConfirmEdit(prev => ({ ...prev, isOpen: false }))} onConfirm={() => { setConfirmEdit(prev => ({ ...prev, isOpen: false })); executeSave(); }} title="ยืนยันการแก้ไขข้อมูลโควตา" text="รายการเหล่านี้มีการผูกข้อมูลไว้ หากบันทึกการเปลี่ยนแปลงจะส่งผลกระทบดังนี้">
         {confirmEdit.data && confirmEdit.data.length > 0 && (
           <ImpactAnalysisTable items={confirmEdit.data.map(item => {
                 const qty = Number(item.quantity) || 0;
@@ -2982,6 +3087,7 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const isLoadingMoreRef = useRef(false); 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const { shouldRender: shouldRenderModal, isAnimatingOut: isAnimatingOutModal } = useModalAnimation(isModalOpen);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({ 
     id: '', 
@@ -3182,7 +3288,7 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
 
   const handleDelete = async () => {
     const idToDelete = confirmDelete.id;
-    setConfirmDelete({ isOpen: false, id: null });
+    setConfirmDelete(prev => ({ ...prev, isOpen: false }));
     setLoadingMsg('กำลังลบข้อมูลลูกค้า...');
     setIsLoading(true);
     const response = await requestAPI('DELETE_DATA', 'Customers', { id: idToDelete });
@@ -3347,9 +3453,9 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
             renderFields={(c) => []}
             renderActions={(c) => (
               <>
+                <button onClick={() => setConfirmDelete({ isOpen: true, id: c.id })} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-xs"><Trash2 className="w-4 h-4" /> ลบ</button>
                 <button className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-xl transition-colors font-medium text-xs"><Printer className="w-4 h-4" /> พิมพ์</button>
                 <button onClick={() => openModal(c, false)} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs"><Edit className="w-4 h-4" /> แก้ไข</button>
-                <button onClick={() => setConfirmDelete({ isOpen: true, id: c.id })} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-xs"><Trash2 className="w-4 h-4" /> ลบ</button>
               </>
             )}
           />
@@ -3357,10 +3463,10 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
         </div>
       </div>
 
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[24px] w-full max-w-4xl shadow-2xl flex flex-col max-h-[95vh] overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="px-6 py-4 flex justify-between items-center bg-white border-b border-slate-100 shrink-0">
+      {shouldRenderModal && (
+        <div className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[120] flex items-center justify-center p-3 sm:p-4 font-body ${isAnimatingOutModal ? 'backdrop-animate-out' : 'backdrop-animate-in'}`}>
+          <div className={`bg-white w-full max-w-4xl shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[90vh] rounded-[20px] sm:rounded-[24px] overflow-hidden ${isAnimatingOutModal ? 'modal-animate-out' : 'modal-animate-in'}`}>
+            <div className="px-4 sm:px-6 py-4 flex justify-between items-center bg-white border-b border-slate-100 shrink-0">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-full bg-sky-50 text-sky-500 flex items-center justify-center">
                   {isViewOnly ? <Info className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
@@ -3372,16 +3478,16 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
               </div>
               <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-full border border-slate-200 text-slate-400 hover:bg-slate-50 transition-colors"><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-6 overflow-y-auto bg-slate-50/50 space-y-6 flex-1">
-              <div className="bg-white border border-slate-200/60 rounded-[20px] p-6 shadow-sm">
+            <div className="p-4 sm:p-6 overflow-y-auto bg-slate-50/50 space-y-4 sm:space-y-6 flex-1 flex flex-col">
+              <div className="bg-white border border-slate-200/60 rounded-[20px] p-4 sm:p-6 shadow-sm">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-4 mb-5">
                   <div className="flex items-center gap-2 text-sky-600"><UserCircle className="w-5 h-5" /><h4 className="font-bold text-[16px]">ข้อมูลส่วนตัว</h4></div>
-                  <div className="flex items-center gap-3">
-                    {!isViewOnly && <button type="button" onClick={startCamera} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-600 text-[13px] font-medium border border-indigo-100 hover:bg-indigo-100 transition-colors active:scale-95"><Camera className="w-4 h-4" /> ถ่ายรูปบัตรประชาชน</button>}
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-50 text-slate-500 text-[13px] border border-slate-100"><Clock className="w-4 h-4" /> ลงทะเบียน: {new Date().toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' })} น.</div>
+                  <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                    {!isViewOnly && <button type="button" onClick={startCamera} className="flex justify-center items-center gap-2 px-4 py-2 sm:py-1.5 rounded-full bg-indigo-50 text-indigo-600 text-[14px] sm:text-[13px] font-bold sm:font-medium border border-indigo-100 hover:bg-indigo-100 transition-colors active:scale-95"><Camera className="w-4 h-4" /> ถ่ายรูปบัตรประชาชน</button>}
+                    <div className="flex justify-center items-center gap-2 px-4 py-2 sm:py-1.5 rounded-full bg-slate-50 text-slate-500 text-[13px] border border-slate-100"><Clock className="w-4 h-4" /> ลงทะเบียน: {new Date().toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' })} น.</div>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-x-6 gap-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-x-6 gap-y-4 sm:gap-y-5">
                   <div className="space-y-1.5">
                     <label className="text-[13px] font-medium text-slate-600">รหัสลูกค้า <span className="text-rose-500">*</span></label>
                     <input value={formData.id} readOnly className="w-full h-[44px] px-4 bg-slate-50 border border-slate-200 rounded-[12px] font-mono-code text-[14px] text-slate-500 outline-none" />
@@ -3428,9 +3534,9 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
                   )}
                 </div>
               </div>
-              <div className="bg-white border border-slate-200/60 rounded-[20px] p-6 shadow-sm">
+              <div className="bg-white border border-slate-200/60 rounded-[20px] p-4 sm:p-6 shadow-sm">
                 <div className="flex items-center gap-2 text-sky-600 border-b border-slate-100 pb-4 mb-5"><MapPin className="w-5 h-5" /><h4 className="font-bold text-[16px]">ข้อมูลติดต่อ</h4></div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 sm:gap-y-5">
                   <div className="space-y-1.5">
                     <label className="text-[13px] font-medium text-slate-600">เบอร์โทรศัพท์ <span className="text-rose-500">*</span></label>
                     <input disabled={isViewOnly} value={formData.phone} onChange={(e)=>setFormData({...formData, phone: e.target.value})} placeholder="08X-XXX-XXXX" className="w-full h-[44px] px-4 bg-white border border-slate-200 rounded-[12px] font-mono-code text-[14px] text-slate-700 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed" />
@@ -3445,9 +3551,9 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
                   </div>
                 </div>
               </div>
-              <div className="bg-white border border-slate-200/60 rounded-[20px] p-6 shadow-sm">
+              <div className="bg-white border border-slate-200/60 rounded-[20px] p-4 sm:p-6 shadow-sm">
                 <div className="flex items-center gap-2 text-sky-600 border-b border-slate-100 pb-4 mb-5"><CircleDollarSign className="w-5 h-5" /><h4 className="font-bold text-[16px]">ข้อมูลบัญชีธนาคาร</h4></div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 sm:gap-y-5">
                   <div className="space-y-1.5">
                     <label className="text-[13px] font-medium text-slate-600">ชื่อธนาคาร</label>
                     <input disabled={isViewOnly} list="thai-banks" value={formData.bankName || ''} onChange={(e)=>setFormData({...formData, bankName: e.target.value})} placeholder="เลือกหรือพิมพ์ชื่อธนาคาร..." className="w-full h-[44px] px-4 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed" />
@@ -3471,19 +3577,19 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
                 </div>
               </div>
             </div>
-            <div className="px-6 py-4 bg-white border-t border-slate-100 flex justify-end gap-3 shrink-0">
-              <button onClick={() => setIsModalOpen(false)} className="h-[44px] px-6 text-[14px] font-medium text-slate-600 bg-white border border-slate-200 rounded-[12px] hover:bg-slate-50 transition-colors active:scale-95">{isViewOnly ? 'ปิดหน้าต่าง' : 'ยกเลิก'}</button>
-              {!isViewOnly && <button onClick={handleSave} className="h-[44px] px-6 text-[14px] font-medium text-white bg-sky-500 rounded-[12px] hover:bg-sky-600 transition-colors active:scale-95 flex items-center gap-2 shadow-[0_4px_12px_rgba(14,165,233,0.25)]"><CheckCircle className="w-4 h-4" /> บันทึกข้อมูล</button>}
+            <div className="px-4 sm:px-6 py-4 bg-white border-t border-slate-100 flex flex-row justify-end gap-3 shrink-0">
+              <button onClick={() => setIsModalOpen(false)} className="flex-1 sm:flex-none h-[48px] px-4 sm:px-6 text-[15px] font-medium text-slate-600 bg-slate-50 sm:bg-white border border-slate-200 rounded-xl hover:bg-slate-100 sm:hover:bg-slate-50 transition-colors active:scale-95 whitespace-nowrap">{isViewOnly ? 'ปิดหน้าต่าง' : 'ยกเลิก'}</button>
+              {!isViewOnly && <button onClick={handleSave} className="flex-1 sm:flex-none h-[48px] px-4 sm:px-6 text-[15px] font-medium text-white bg-sky-500 rounded-xl hover:bg-sky-600 transition-colors active:scale-95 flex items-center justify-center gap-2 shadow-[0_4px_12px_rgba(14,165,233,0.25)] whitespace-nowrap"><CheckCircle className="w-5 h-5 hidden sm:block" /> บันทึกข้อมูล</button>}
             </div>
           </div>
         </div>
       )}
       {isCameraOpen && (
-        <div className="fixed inset-0 bg-black z-[200] flex flex-col justify-center items-center">
-          <video ref={videoRef} autoPlay playsInline className="absolute w-full h-full object-cover" />
+        <div className="fixed inset-0 bg-black z-[200] flex flex-col justify-center items-center backdrop-animate-in">
+          <video ref={videoRef} autoPlay playsInline className="absolute w-full h-full object-cover modal-animate-in" />
           <canvas ref={canvasRef} className="hidden" />
           
-          <div className="absolute inset-0 z-10 pointer-events-none flex items-center justify-center">
+          <div className="absolute inset-0 z-10 pointer-events-none flex items-center justify-center modal-animate-in" style={{ animationDelay: '100ms' }}>
             <div ref={frameRef} style={{ width: '90vw', maxWidth: 'calc(60vh * 1.586)', aspectRatio: '1.586 / 1' }} className="border-4 border-emerald-500 rounded-xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.6)]">
                <div className="absolute bottom-[calc(100%+12px)] left-1/2 -translate-x-1/2 bg-black/90 backdrop-blur-sm px-4 py-1.5 border border-emerald-500/50 rounded-full text-center whitespace-nowrap flex items-center gap-2 shadow-lg">
                   <span className="text-emerald-400 font-bold text-[14px]">วางบัตรให้พอดีกรอบ</span>
@@ -3519,7 +3625,7 @@ function CustomerModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, cus
 
 
 
-      <ConfirmAlert isOpen={confirmDelete.isOpen} onCancel={() => setConfirmDelete({ isOpen: false, id: null })} onConfirm={handleDelete} title="ยืนยันลบ" text="ต้องการลบรายการนี้ใช่ไหม" />
+      <ConfirmAlert isOpen={confirmDelete.isOpen} onCancel={() => setConfirmDelete(prev => ({ ...prev, isOpen: false }))} onConfirm={handleDelete} title="ยืนยันลบ" text="ต้องการลบรายการนี้ใช่ไหม" />
     </div>
   );
 }
@@ -3534,6 +3640,7 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const isLoadingMoreRef = useRef(false); 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const { shouldRender: shouldRenderModal, isAnimatingOut: isAnimatingOutModal } = useModalAnimation(isModalOpen);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({ id: '', name: '', category: 'ทองแดง', unit: 'กก.', buyPrice: '', sellPrice: '', status: 'Active', note: '' });
   const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, id: null });
@@ -3625,7 +3732,7 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
 
   const handleDelete = async () => {
     const idToDelete = confirmDelete.id;
-    setConfirmDelete({ isOpen: false, id: null });
+    setConfirmDelete(prev => ({ ...prev, isOpen: false }));
     setLoadingMsg('กำลังลบข้อมูลสินค้า...');
     setIsLoading(true);
     const response = await requestAPI('DELETE_DATA', 'Products', { id: idToDelete });
@@ -3789,9 +3896,9 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
             ]}
             renderActions={(p) => (
               <>
+                <button onClick={() => setConfirmDelete({ isOpen: true, id: p.id })} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-xs"><Trash2 className="w-4 h-4" /> ลบ</button>
                 <button onClick={() => openModal(p, true)} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-xl transition-colors font-medium text-xs"><Info className="w-4 h-4" /> ดูข้อมูล</button>
                 <button onClick={() => openModal(p, false)} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs"><Edit className="w-4 h-4" /> แก้ไข</button>
-                <button onClick={() => setConfirmDelete({ isOpen: true, id: p.id })} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-xs"><Trash2 className="w-4 h-4" /> ลบ</button>
               </>
             )}
           />
@@ -3799,21 +3906,21 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
         </div>
       </div>
 
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[24px] w-full max-w-4xl shadow-2xl flex flex-col max-h-[95vh] overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="px-6 py-4 flex justify-between items-center bg-white border-b border-slate-100 shrink-0">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-sky-50 text-sky-500 flex items-center justify-center"><Info className="w-6 h-6" /></div>
+      {shouldRenderModal && (
+        <div className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[120] flex items-center justify-center p-3 sm:p-4 font-body ${isAnimatingOutModal ? 'backdrop-animate-out' : 'backdrop-animate-in'}`}>
+          <div className={`bg-white w-full max-w-4xl shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[90vh] rounded-[20px] sm:rounded-[24px] overflow-hidden ${isAnimatingOutModal ? 'modal-animate-out' : 'modal-animate-in'}`}>
+            <div className="px-4 sm:px-6 py-4 flex justify-between items-center bg-white border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-sky-50 text-sky-500 flex items-center justify-center shrink-0"><Info className="w-5 h-5 sm:w-6 sm:h-6" /></div>
                 <div>
-                  <h3 className="font-display text-[20px] font-bold text-slate-800 leading-tight">{isViewOnly ? 'รายละเอียดสินค้า' : (editingId ? 'แก้ไขข้อมูลสินค้า' : 'เพิ่มสินค้าใหม่')}</h3>
-                  <p className="text-[13px] text-slate-500">{isViewOnly ? 'ดูรายละเอียดของสินค้าและราคา' : 'กรอกข้อมูลรายละเอียดและราคาของสินค้า'}</p>
+                  <h3 className="font-display text-[18px] sm:text-[20px] font-bold text-slate-800 leading-tight">{isViewOnly ? 'รายละเอียดสินค้า' : (editingId ? 'แก้ไขข้อมูลสินค้า' : 'เพิ่มสินค้าใหม่')}</h3>
+                  <p className="text-[12px] sm:text-[13px] text-slate-500">{isViewOnly ? 'ดูรายละเอียดของสินค้าและราคา' : 'กรอกข้อมูลรายละเอียดและราคาของสินค้า'}</p>
                 </div>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-full border border-slate-200 text-slate-400 hover:bg-slate-50 transition-colors"><X className="w-5 h-5" /></button>
+              <button onClick={() => setIsModalOpen(false)} className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full border border-slate-200 text-slate-400 hover:bg-slate-50 transition-colors shrink-0"><X className="w-4 h-4 sm:w-5 sm:h-5" /></button>
             </div>
-            <div className="p-6 overflow-y-auto bg-slate-50/50 space-y-6 flex-1">
-              <div className="bg-white border border-slate-200/60 rounded-[20px] p-6 shadow-sm">
+            <div className="p-4 sm:p-6 overflow-y-auto bg-slate-50/50 space-y-4 sm:space-y-6 flex-1 flex flex-col">
+              <div className="bg-white border border-slate-200/60 rounded-[20px] p-4 sm:p-6 shadow-sm shrink-0">
                 <div className="flex items-center gap-2 text-sky-600 border-b border-slate-100 pb-4 mb-5"><Box className="w-5 h-5" /><h4 className="font-bold text-[16px]">ข้อมูลสินค้าพื้นฐาน</h4></div>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-x-6 gap-y-5">
                   <div className="space-y-1.5">
@@ -3839,9 +3946,9 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
                   </div>
                 </div>
               </div>
-              <div className="bg-white border border-slate-200/60 rounded-[20px] p-6 shadow-sm">
-                <div className="flex items-center gap-2 text-emerald-600 border-b border-slate-100 pb-4 mb-5"><CircleDollarSign className="w-5 h-5" /><h4 className="font-bold text-[16px]">ราคาและหน่วยนับ</h4></div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-5">
+              <div className="bg-white border border-slate-200/60 rounded-[20px] p-4 sm:p-6 shadow-sm shrink-0">
+                <div className="flex items-center gap-2 text-emerald-600 border-b border-slate-100 pb-3 sm:pb-4 mb-4 sm:mb-5"><CircleDollarSign className="w-5 h-5" /><h4 className="font-bold text-[16px]">ราคาและหน่วยนับ</h4></div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4 sm:gap-y-5">
                   <div className="space-y-1.5">
                       <label className="text-[13px] font-medium text-slate-600">หน่วยนับ <span className="text-rose-500">*</span></label>
                       <select disabled={isViewOnly} value={formData.unit} onChange={(e)=>setFormData({...formData, unit: e.target.value})} className="w-full h-[44px] px-4 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed">
@@ -3859,14 +3966,16 @@ function ProductModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, prod
                 </div>
               </div>
             </div>
-            <div className="px-6 py-4 bg-white border-t border-slate-100 flex justify-end gap-3 shrink-0">
-              <button onClick={() => setIsModalOpen(false)} className="h-[44px] px-6 text-[14px] font-medium text-slate-600 bg-white border border-slate-200 rounded-[12px] hover:bg-slate-50 transition-colors active:scale-95">{isViewOnly ? 'ปิดหน้าต่าง' : 'ยกเลิก'}</button>
-              {!isViewOnly && <button onClick={handleSave} className="h-[44px] px-6 text-[14px] font-medium text-white bg-sky-500 rounded-[12px] hover:bg-sky-600 transition-colors active:scale-95 flex items-center gap-2 shadow-[0_4px_12px_rgba(14,165,233,0.25)]"><CheckCircle className="w-4 h-4" /> บันทึกข้อมูล</button>}
+            <div className="px-4 sm:px-6 py-4 bg-white border-t border-slate-100 flex flex-col sm:flex-row justify-between gap-3 shrink-0">
+              <div className="flex flex-row gap-3 w-full sm:w-auto sm:justify-end sm:ml-auto">
+                <button onClick={() => setIsModalOpen(false)} className="flex-1 sm:flex-none h-[48px] px-4 sm:px-8 text-[14px] sm:text-[15px] font-medium text-slate-600 bg-slate-50 sm:bg-white border border-slate-200 rounded-xl hover:bg-slate-100 sm:hover:bg-slate-50 transition-colors active:scale-95 whitespace-nowrap">{isViewOnly ? 'ปิดหน้าต่าง' : 'ยกเลิก'}</button>
+                {!isViewOnly && <button onClick={handleSave} className="flex-1 sm:flex-none h-[48px] px-4 sm:px-8 text-[14px] sm:text-[15px] font-medium text-white bg-sky-500 rounded-xl hover:bg-sky-600 transition-colors active:scale-95 flex items-center justify-center gap-2 shadow-[0_4px_12px_rgba(14,165,233,0.25)] whitespace-nowrap"><CheckCircle className="w-5 h-5 shrink-0 hidden sm:block" /> บันทึกข้อมูล</button>}
+              </div>
             </div>
           </div>
         </div>
       )}
-      <ConfirmAlert isOpen={confirmDelete.isOpen} onCancel={() => setConfirmDelete({ isOpen: false, id: null })} onConfirm={handleDelete} title="ยืนยันลบ" text="ต้องการลบสินค้านี้ใช่ไหม" />
+      <ConfirmAlert isOpen={confirmDelete.isOpen} onCancel={() => setConfirmDelete(prev => ({ ...prev, isOpen: false }))} onConfirm={handleDelete} title="ยืนยันลบ" text="ต้องการลบสินค้านี้ใช่ไหม" />
     </div>
   );
 }
@@ -3881,6 +3990,7 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const isLoadingMoreRef = useRef(false); 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const { shouldRender: shouldRenderModal, isAnimatingOut: isAnimatingOutModal } = useModalAnimation(isModalOpen);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({ id: '', refId: '', date: '', name: '', category: '', quantity: '', unit: '', status: 'Active', note: '' });
   const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, id: null });
@@ -3997,7 +4107,7 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
 
   const handleDelete = async () => {
     const idToDelete = confirmDelete.id;
-    setConfirmDelete({ isOpen: false, id: null, data: [] });
+    setConfirmDelete(prev => ({ ...prev, isOpen: false }));
     setLoadingMsg('กำลังลบข้อมูลสต๊อก...');
     setIsLoading(true);
 
@@ -4306,12 +4416,12 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
             ]}
             renderActions={(s) => (
               <>
+                {!(s.refId && (s.refId.startsWith('REC') || s.refId.startsWith('INV'))) && (
+                  <button onClick={() => setConfirmDelete({ isOpen: true, id: s.id, refId: s.refId })} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-xs"><Trash2 className="w-4 h-4" /> ลบ</button>
+                )}
                 <button onClick={() => openModal(s, true)} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-xl transition-colors font-medium text-xs"><Info className="w-4 h-4" /> ดูข้อมูล</button>
                 {!(s.refId && (s.refId.startsWith('REC') || s.refId.startsWith('INV'))) && (
                   <button onClick={() => openModal(s, false)} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs"><Edit className="w-4 h-4" /> แก้ไข</button>
-                )}
-                {!(s.refId && (s.refId.startsWith('REC') || s.refId.startsWith('INV'))) && (
-                  <button onClick={() => setConfirmDelete({ isOpen: true, id: s.id, refId: s.refId })} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-xs"><Trash2 className="w-4 h-4" /> ลบ</button>
                 )}
               </>
             )}
@@ -4320,27 +4430,27 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
         </div>
       </div>
 
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[24px] w-full max-w-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="px-6 py-4 flex justify-between items-center bg-white border-b border-slate-100 shrink-0">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-sky-50 text-sky-500 flex items-center justify-center">
-                  {isViewOnly ? <Info className="w-6 h-6" /> : <Box className="w-6 h-6" />}
+      {shouldRenderModal && (
+        <div className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[120] flex items-center justify-center p-3 sm:p-4 font-body ${isAnimatingOutModal ? 'backdrop-animate-out' : 'backdrop-animate-in'}`}>
+          <div className={`bg-white w-full max-w-4xl shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[90vh] rounded-[20px] sm:rounded-[24px] overflow-hidden ${isAnimatingOutModal ? 'modal-animate-out' : 'modal-animate-in'}`}>
+            <div className="px-4 sm:px-6 py-4 flex justify-between items-center bg-white border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-sky-50 text-sky-500 flex items-center justify-center shrink-0">
+                  {isViewOnly ? <Info className="w-5 h-5 sm:w-6 sm:h-6" /> : <Box className="w-5 h-5 sm:w-6 sm:h-6" />}
                 </div>
                 <div>
-                  <h3 className="font-display text-[20px] font-bold text-slate-800 leading-tight">
+                  <h3 className="font-display text-[18px] sm:text-[20px] font-bold text-slate-800 leading-tight">
                     {isViewOnly ? 'รายละเอียดการเคลื่อนไหว' : (editingId ? 'แก้ไขรายการปรับยอด' : 'เพิ่มประวัติสต๊อก (แมนนวล)')}
                   </h3>
-                  <p className="text-[13px] text-slate-500">
+                  <p className="text-[12px] sm:text-[13px] text-slate-500">
                     {isViewOnly ? 'ดูประวัติการเข้า-ออกของสินค้านี้' : 'เพิ่มยอดเข้า (+) หรือลบยอดออก (-) ด้วยตัวเอง'}
                   </p>
                 </div>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-full border border-slate-200 text-slate-400 hover:bg-slate-50 transition-colors"><X className="w-5 h-5" /></button>
+              <button onClick={() => setIsModalOpen(false)} className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full border border-slate-200 text-slate-400 hover:bg-slate-50 transition-colors shrink-0"><X className="w-4 h-4 sm:w-5 sm:h-5" /></button>
             </div>
 
-            <div className="p-6 overflow-y-auto bg-slate-50/50 space-y-6 flex-1 flex flex-col">
+            <div className="p-4 sm:p-6 overflow-y-auto bg-slate-50/50 space-y-4 sm:space-y-6 flex-1 flex flex-col">
               <div className="bg-sky-50 border border-sky-100 rounded-[16px] p-4 flex gap-3 items-start shrink-0">
                 <Info className="w-5 h-5 text-sky-500 mt-0.5 shrink-0" />
                 <div className="text-[13px] text-sky-800 leading-relaxed">
@@ -4349,9 +4459,9 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
                 </div>
               </div>
 
-              <div className="bg-white border border-slate-200/60 rounded-[20px] p-6 shadow-sm shrink-0">
-                <div className="flex items-center gap-2 text-sky-600 border-b border-slate-100 pb-4 mb-5"><Box className="w-5 h-5" /><h4 className="font-bold text-[16px]">ข้อมูลสินค้า</h4></div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-x-6 gap-y-5">
+              <div className="bg-white border border-slate-200/60 rounded-[20px] p-4 sm:p-6 shadow-sm shrink-0">
+                <div className="flex items-center gap-2 text-sky-600 border-b border-slate-100 pb-3 sm:pb-4 mb-4 sm:mb-5"><Box className="w-5 h-5" /><h4 className="font-bold text-[16px]">ข้อมูลสินค้า</h4></div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-x-6 gap-y-4 sm:gap-y-5">
                   <div className="space-y-1.5 md:col-span-2">
                     <label className="text-[13px] font-medium text-slate-600">วันที่รายการ <span className="text-rose-500">*</span></label>
                     <div className="relative">
@@ -4409,9 +4519,9 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
                 </div>
               </div>
 
-              <div className="bg-white border border-slate-200/60 rounded-[20px] p-6 shadow-sm shrink-0 flex-1">
-                <div className="flex items-center gap-2 text-indigo-600 border-b border-slate-100 pb-4 mb-5"><Warehouse className="w-5 h-5" /><h4 className="font-bold text-[16px]">รายการเคลื่อนไหว</h4></div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-5">
+              <div className="bg-white border border-slate-200/60 rounded-[20px] p-4 sm:p-6 shadow-sm shrink-0 flex-1">
+                <div className="flex items-center gap-2 text-indigo-600 border-b border-slate-100 pb-3 sm:pb-4 mb-4 sm:mb-5"><Warehouse className="w-5 h-5" /><h4 className="font-bold text-[16px]">รายการเคลื่อนไหว</h4></div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4 sm:gap-y-5">
                   <div className="space-y-1.5 md:col-span-2">
                       <label className="text-[13px] font-medium text-slate-600">จำนวนที่เปลี่ยนแปลง (เข้า +, ออก -) <span className="text-rose-500">*</span></label>
                       <input 
@@ -4435,18 +4545,20 @@ function StockModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, stockD
               </div>
             </div>
             
-            <div className="px-6 py-4 bg-white border-t border-slate-100 flex justify-end gap-3 shrink-0">
-              <button onClick={() => setIsModalOpen(false)} className="h-[48px] px-6 text-[14px] font-medium text-slate-600 bg-white border border-slate-200 rounded-[12px] hover:bg-slate-50 transition-colors active:scale-95">{isViewOnly ? 'ปิดหน้าต่าง' : 'ยกเลิก'}</button>
-              {!isViewOnly && (
-                <button onClick={handleSave} className="h-[48px] px-8 text-[15px] font-medium text-white bg-sky-500 rounded-[12px] hover:bg-sky-600 transition-colors active:scale-95 flex items-center gap-2 shadow-[0_4px_12px_rgba(14,165,233,0.25)]">
-                  <CheckCircle className="w-5 h-5" /> บันทึกประวัติ
-                </button>
-              )}
+            <div className="px-4 sm:px-6 py-4 bg-white border-t border-slate-100 flex flex-col sm:flex-row justify-between gap-3 shrink-0">
+              <div className="flex flex-row gap-3 w-full sm:w-auto sm:justify-end sm:ml-auto">
+                <button onClick={() => setIsModalOpen(false)} className="flex-1 sm:flex-none h-[48px] px-4 sm:px-8 text-[14px] sm:text-[15px] font-medium text-slate-600 bg-slate-50 sm:bg-white border border-slate-200 rounded-xl hover:bg-slate-100 sm:hover:bg-slate-50 transition-colors active:scale-95 whitespace-nowrap">{isViewOnly ? 'ปิดหน้าต่าง' : 'ยกเลิก'}</button>
+                {!isViewOnly && (
+                  <button onClick={handleSave} className="flex-1 sm:flex-none h-[48px] px-4 sm:px-8 text-[14px] sm:text-[15px] font-medium text-white bg-sky-500 rounded-xl hover:bg-sky-600 transition-colors active:scale-95 flex items-center justify-center gap-2 shadow-[0_4px_12px_rgba(14,165,233,0.25)] whitespace-nowrap">
+                    <CheckCircle className="w-5 h-5 shrink-0 hidden sm:block" /> บันทึกประวัติ
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
       )}
-      <ConfirmAlert isOpen={confirmDelete.isOpen} onCancel={() => setConfirmDelete({ isOpen: false, id: null, data: [] })} onConfirm={handleDelete} title="ยืนยันลบรายการ" text="ยอดรวมของสินค้านี้จะถูกหักลบ/คืนค่าตามรายการนี้ ต้องการลบใช่ไหม?">
+      <ConfirmAlert isOpen={confirmDelete.isOpen} onCancel={() => setConfirmDelete(prev => ({ ...prev, isOpen: false }))} onConfirm={handleDelete} title="ยืนยันลบรายการ" text="ยอดรวมของสินค้านี้จะถูกหักลบ/คืนค่าตามรายการนี้ ต้องการลบใช่ไหม?">
         {confirmDelete.data && confirmDelete.data.length > 0 && <ImpactAnalysisTable items={confirmDelete.data} />}
       </ConfirmAlert>
     </div>
@@ -4521,7 +4633,7 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
 
   const handleDelete = async () => {
     const idToDelete = confirmDelete.id;
-    setConfirmDelete({ isOpen: false, id: null });
+    setConfirmDelete(prev => ({ ...prev, isOpen: false }));
     setLoadingMsg('กำลังลบบิลและย้อนกลับยอดสต๊อก...');
     setIsLoading(true);
     
@@ -4777,16 +4889,16 @@ function BillingModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, bill
             }}
             renderActions={(b) => (
               <>
-                <button onClick={(e) => { e.stopPropagation(); executePrintBill && executePrintBill(b); }} className="flex-1 flex items-center justify-center gap-2 py-2 text-sky-500 hover:text-sky-600 bg-sky-50 hover:bg-sky-100 rounded-xl transition-colors font-bold text-xs"><Printer className="w-4 h-4" /> พิมพ์</button>
-                <button onClick={(e) => { e.stopPropagation(); openBillModal && openBillModal(b, false); }} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs"><Edit className="w-4 h-4" /> แก้ไข</button>
                 <button onClick={(e) => { e.stopPropagation(); setConfirmDelete({ isOpen: true, id: b.id }); }} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-xs"><Trash2 className="w-4 h-4" /> ลบ</button>
+                <button onClick={(e) => { e.stopPropagation(); openBillModal && openBillModal(b, false); }} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs"><Edit className="w-4 h-4" /> แก้ไข</button>
+                <button onClick={(e) => { e.stopPropagation(); executePrintBill && executePrintBill(b); }} className="flex-1 flex items-center justify-center gap-2 py-2 text-sky-500 hover:text-sky-600 bg-sky-50 hover:bg-sky-100 rounded-xl transition-colors font-bold text-xs"><Printer className="w-4 h-4" /> พิมพ์</button>
               </>
             )}
           />
           
         </div>
       </div>
-      <ConfirmAlert isOpen={confirmDelete.isOpen} onCancel={() => setConfirmDelete({ isOpen: false, id: null, data: [] })} onConfirm={handleDelete} title="ยืนยันลบ" text="ต้องการลบบิลและคืนค่ายอดสต๊อกใช่ไหม">
+      <ConfirmAlert isOpen={confirmDelete.isOpen} onCancel={() => setConfirmDelete(prev => ({ ...prev, isOpen: false }))} onConfirm={handleDelete} title="ยืนยันลบ" text="ต้องการลบบิลและคืนค่ายอดสต๊อกใช่ไหม">
         {confirmDelete.data && confirmDelete.data.length > 0 && <ImpactAnalysisTable items={confirmDelete.data} />}
       </ConfirmAlert>
     </div>
