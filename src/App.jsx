@@ -645,6 +645,7 @@ export default function App() {
   const [lockData, setLockData] = useState(null);         
   const [dailyPriceData, setDailyPriceData] = useState(null); 
   const [billingData, setBillingData] = useState(null);
+  const [financeData, setFinanceData] = useState(null);
 
   // --- Global Bill Modal State ---
   const [billModalConfig, setBillModalConfig] = useState({ isOpen: false, bill: null, isViewOnly: false });
@@ -655,7 +656,7 @@ export default function App() {
   const loadAllData = async () => {
     setIsGlobalFetching(true);
     try {
-      const res = await requestAPI('GET_ALL_DATA', '', { sheetNames: ['Customers', 'Products', 'Stock', 'DailyLocks', 'DailyPrices', 'Billing'] });
+      const res = await requestAPI('GET_ALL_DATA', '', { sheetNames: ['Customers', 'Products', 'Stock', 'DailyLocks', 'DailyPrices', 'Billing', 'Finance'] });
       if (res.status === 'success') {
         setCustomerData(res.data['Customers'] || []);
         setProductData(res.data['Products'] || []);
@@ -663,6 +664,7 @@ export default function App() {
         setLockData(res.data['DailyLocks'] || []);
         setDailyPriceData(res.data['DailyPrices'] || []);
         setBillingData(res.data['Billing'] || []);
+        setFinanceData(res.data['Finance'] || []);
       } else {
         addToast('โหลดข้อมูลล้มเหลว: ' + res.message, 'error');
       }
@@ -732,7 +734,7 @@ export default function App() {
 
 
 
-  const mobileNavItems = menus.filter(item => ['daily_prices', 'customers', 'billing', 'lock'].includes(item.id));
+  const mobileNavItems = menus.filter(item => ['daily_prices', 'customers', 'billing', 'finance', 'lock'].includes(item.id));
   const activeNavIndex = mobileNavItems.findIndex(item => item.id === activeMenu);
 
   const requestAPI = async (action, sheetName, payload = {}) => {
@@ -1012,6 +1014,12 @@ export default function App() {
               setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
               billingData={billingData} setBillingData={setBillingData} customerData={customerData} productData={productData} 
               dailyPriceData={dailyPriceData} stockData={stockData} setStockData={setStockData} lockData={lockData} openBillModal={openBillModal} isGlobalFetching={isGlobalFetching} reloadAllData={loadAllData} executePrintBill={executePrintBill}
+            />
+          ) : activeMenu === 'finance' ? (
+            <FinanceModule 
+              setIsLoading={setIsLoading} setLoadingMsg={setLoadingMsg} addToast={addToast} requestAPI={requestAPI} 
+              financeData={financeData} setFinanceData={setFinanceData} billingData={billingData} isGlobalFetching={isGlobalFetching}
+              reloadAllData={loadAllData} openBillModal={openBillModal}
             />
           ) : (
             <div className="p-4 md:p-8 h-full">
@@ -5170,3 +5178,438 @@ export const generateA5ReceiptHtml = (bill, customer, companyInfo) => {
     </html>
   `;
 };
+
+// ==========================================
+// 7. FINANCE MODULE (การเงิน)
+// ==========================================
+function FinanceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, financeData, setFinanceData, billingData, isGlobalFetching, reloadAllData, openBillModal }) {
+  const [isFetchingTable, setIsFetchingTable] = useState(financeData === null); 
+  const [visibleCount, setVisibleCount] = useState(15);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const isLoadingMoreRef = useRef(false); 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
+  const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, id: null });
+  
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  
+  const getInitialForm = () => ({ id: '', date: new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().slice(0, 19), type: 'EXPENSE', category: 'ทั่วไป', title: '', amount: '', note: '' });
+  const [formData, setFormData] = useState(getInitialForm());
+
+  const { isAnimatingOut: isClosing, shouldRender } = useModalAnimation(isModalOpen);
+
+  const headerRef = useRef(null);
+  const filterRef = useRef(null);
+  useStickyScroll(headerRef, filterRef);
+
+  useEffect(() => { if (isGlobalFetching) setIsFetchingTable(true); else setIsFetchingTable(financeData === null); }, [financeData, isGlobalFetching]);
+
+  const combinedData = React.useMemo(() => {
+    const records = [];
+    (billingData || []).forEach(b => {
+      records.push({
+        id: b.id,
+        date: b.date,
+        type: b.type === 'BUY' ? 'EXPENSE' : 'INCOME',
+        category: b.category || (b.type === 'BUY' ? 'ซื้อของเก่า' : 'ขายของเก่า'),
+        title: `บิล ${b.id} - ${b.customerName || 'ลูกค้าทั่วไป'}`,
+        amount: Number(b.grandTotal) || 0,
+        isBill: true,
+        note: b.note || '',
+        originalData: b
+      });
+    });
+    (financeData || []).forEach(f => {
+      records.push({
+        ...f,
+        amount: Number(f.amount) || 0,
+        isBill: false
+      });
+    });
+    return records;
+  }, [billingData, financeData]);
+
+  const requestSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
+    setSortConfig({ key, direction });
+  };
+
+  const filteredData = combinedData.filter(r => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return ((r.id || '').toLowerCase().includes(q) || (r.title || '').toLowerCase().includes(q) || (r.category || '').toLowerCase().includes(q));
+  }).sort((a, b) => {
+    let aValue = a[sortConfig.key] || '';
+    let bValue = b[sortConfig.key] || '';
+    if (sortConfig.key === 'amount') {
+      aValue = Number(aValue) || 0; bValue = Number(bValue) || 0;
+    } else if (sortConfig.key === 'date') {
+      aValue = new Date(aValue).getTime() || 0; bValue = new Date(bValue).getTime() || 0;
+    }
+    if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+    if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const displayedData = filteredData.slice(0, visibleCount);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (isLoadingMoreRef.current || visibleCount >= filteredData.length) return;
+      isLoadingMoreRef.current = true;
+      setIsLoadingMore(true);
+      setTimeout(() => {
+        setVisibleCount(prev => prev + 15);
+        setIsLoadingMore(false);
+        isLoadingMoreRef.current = false;
+      }, 400);
+    };
+    window.addEventListener('scroll-to-bottom', handleScroll);
+    return () => window.removeEventListener('scroll-to-bottom', handleScroll);
+  }, [filteredData.length, visibleCount]);
+
+  const formatDateTh = (dateStr) => {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return dateStr;
+    const d = String(date.getDate()).padStart(2, '0');
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const y = date.getFullYear() + 543;
+    const hh = String(date.getHours()).padStart(2, '0');
+    const min = String(date.getMinutes()).padStart(2, '0');
+    return `${d}/${m}/${y} ${hh}:${min}`;
+  };
+
+  const loadData = async () => {
+    setIsFetchingTable(true);
+    const res = await requestAPI('GET_DATA', 'Finance');
+    if (res.status === 'success') {
+      setFinanceData(res.data || []);
+    } else {
+      addToast('ดึงข้อมูลการเงินล้มเหลว', 'error');
+    }
+    setIsFetchingTable(false);
+  };
+
+  const handleOpenModal = (record = null) => {
+    if (record) {
+      if (record.isBill) {
+        openBillModal(record.originalData, true);
+        return;
+      }
+      setEditingId(record.id);
+      setFormData({
+        id: record.id,
+        date: record.date || new Date().toISOString().slice(0, 19),
+        type: record.type || 'EXPENSE',
+        category: record.category || '',
+        title: record.title || '',
+        amount: record.amount || '',
+        note: record.note || ''
+      });
+    } else {
+      setEditingId(null);
+      setFormData(getInitialForm());
+    }
+    setIsModalOpen(true);
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!formData.title || !formData.amount || !formData.date) return addToast('กรุณากรอกข้อมูลให้ครบถ้วน', 'warning');
+    
+    setLoadingMsg(editingId ? 'กำลังอัปเดตข้อมูล...' : 'กำลังบันทึกข้อมูล...');
+    setIsLoading(true);
+
+    const payload = { ...formData, _editingId: editingId };
+    if (!editingId && (!payload.id || payload.id === 'AUTO')) {
+      payload.id = generateDocId('FIN', financeData || [], payload.date);
+    }
+    
+    const response = await requestAPI('SAVE_DATA', 'Finance', payload);
+    if (response.status === 'success') {
+      setTimeout(async () => {
+        if (reloadAllData) await reloadAllData(); else loadData();
+        addToast(editingId ? 'อัปเดตรายการการเงินสำเร็จ' : 'เพิ่มรายการการเงินสำเร็จ', 'success');
+        setIsLoading(false);
+        setIsModalOpen(false);
+      }, 1500);
+    } else {
+      setIsLoading(false);
+      addToast('บันทึกไม่สำเร็จ: ' + (response.message || 'ไม่ทราบสาเหตุ'), 'error');
+    }
+  };
+
+  const executeDelete = async () => {
+    if (!confirmDelete.id) return;
+    const idToDelete = confirmDelete.id;
+    setConfirmDelete({ isOpen: false, id: null });
+    
+    setLoadingMsg('กำลังลบข้อมูล...');
+    setIsLoading(true);
+    
+    const response = await requestAPI('DELETE_DATA', 'Finance', { id: idToDelete });
+    if (response.status === 'success') {
+      setTimeout(async () => { 
+        if (reloadAllData) await reloadAllData(); else loadData(); 
+        addToast('ลบรายการเรียบร้อยแล้ว', 'success'); 
+        setIsLoading(false); 
+      }, 1500);
+    } else {
+      setIsLoading(false);
+      addToast('ลบข้อมูลไม่สำเร็จ: ' + (response.message || 'ไม่ทราบสาเหตุ'), 'error');
+    }
+  };
+
+  const totalIncome = filteredData.filter(r => r.type === 'INCOME').reduce((sum, r) => sum + r.amount, 0);
+  const totalExpense = filteredData.filter(r => r.type === 'EXPENSE').reduce((sum, r) => sum + r.amount, 0);
+
+  return (
+    <div className="flex flex-col font-body pb-[100px] md:pb-10 w-full gap-4 md:gap-5">
+      <div ref={headerRef} className="sticky sticky-header-module z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col">
+        <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
+          <div className="w-full mx-auto px-4 md:px-8 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
+            <div>
+              <h2 className="font-display font-bold text-slate-800 tracking-tight sticky-header-title">การเงินและบัญชี (Finance & Accounting)</h2>
+              <p className="text-slate-500 sticky-header-desc text-[15px]">ดูประวัติรายรับ/รายจ่าย และยอดสรุปทั้งหมด</p>
+            </div>
+            <button onClick={() => handleOpenModal()} className="flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 bg-[#0ea5e9] hover:bg-[#0284c7] text-white px-4 py-2 sm:px-6 sm:py-3 pointer-events-auto">
+              <Plus className="w-5 h-5" /> <span className="hidden sm:inline">เพิ่มรายการ</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="w-full px-4 md:px-8 shrink-0">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+          <div className="bg-white p-6 rounded-[24px] border border-slate-100/60 shadow-[0_2px_20px_rgba(0,0,0,0.02)] flex flex-col gap-3">
+            <div className="flex items-center gap-3 text-[15px] font-medium text-slate-500">
+              <div className="w-10 h-10 rounded-[12px] bg-sky-50 border border-sky-100 flex items-center justify-center text-sky-500"><ArrowDownCircle className="w-5 h-5"/></div>
+              รวมรายจ่าย (E - Expense)
+            </div>
+            {isFetchingTable ? <div className="h-[40px] w-24 bg-slate-100 rounded-[12px] animate-pulse"></div> : <div className="text-[40px] font-display font-bold text-sky-600 leading-none">{totalExpense.toLocaleString()}</div>}
+          </div>
+          <div className="bg-white p-6 rounded-[24px] border border-slate-100/60 shadow-[0_2px_20px_rgba(0,0,0,0.02)] flex flex-col gap-3">
+            <div className="flex items-center gap-3 text-[15px] font-medium text-slate-500">
+              <div className="w-10 h-10 rounded-[12px] bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-500"><ArrowUpCircle className="w-5 h-5"/></div>
+              รวมรายรับ (R - Revenue)
+            </div>
+            {isFetchingTable ? <div className="h-[40px] w-24 bg-slate-100 rounded-[12px] animate-pulse"></div> : <div className="text-[40px] font-display font-bold text-emerald-600 leading-none">{totalIncome.toLocaleString()}</div>}
+          </div>
+          <div className="bg-white p-6 rounded-[24px] border border-slate-100/60 shadow-[0_2px_20px_rgba(0,0,0,0.02)] flex flex-col gap-3">
+            <div className="flex items-center gap-3 text-[15px] font-medium text-slate-500">
+              <div className="w-10 h-10 rounded-[12px] bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-600"><DollarSign className="w-5 h-5"/></div>
+              กำไรสุทธิ (NI - Net Income)
+            </div>
+            {isFetchingTable ? <div className="h-[40px] w-24 bg-slate-100 rounded-[12px] animate-pulse"></div> : <div className={`text-[40px] font-display font-bold leading-none ${totalIncome - totalExpense >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>{(totalIncome - totalExpense).toLocaleString()}</div>}
+          </div>
+        </div>
+      </div>
+
+      <div ref={filterRef} className="w-full pointer-events-none sticky sticky-filter-module z-20 transition-all duration-300 ease-in-out">
+        <div className="w-full mx-auto pointer-events-none relative h-[68px] z-50">
+          <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 mx-auto pointer-events-auto origin-top sticky-filter-inner flex flex-row items-center transition-all">
+            <div className="relative w-full">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="ค้นหาเลขที่, หมวดหมู่ หรือคำอธิบาย..." className="w-full h-[48px] pl-12 pr-4 bg-slate-50 border border-slate-200 rounded-xl outline-none text-[15px] text-slate-700 placeholder:text-slate-400 font-body focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors shadow-inner" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="w-full px-4 md:px-8 flex-1">
+        <div className="md:bg-white md:rounded-[24px] md:border md:border-slate-100/60 md:shadow-[0_2px_20px_rgba(0,0,0,0.02)] flex flex-col overflow-hidden">
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-left border-collapse whitespace-nowrap min-w-[800px]">
+              <thead className="bg-slate-50/50 border-b border-slate-100">
+                <tr>
+                  <th onClick={() => requestSort('date')} className="px-6 py-4 font-medium text-slate-500 text-[14px] cursor-pointer hover:bg-slate-200 transition-colors select-none">วันที่/เวลา {sortConfig.key === 'date' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '⇅'}</th>
+                  <th onClick={() => requestSort('id')} className="px-6 py-4 font-medium text-slate-500 text-[14px] cursor-pointer hover:bg-slate-200 transition-colors select-none">เลขที่อ้างอิง {sortConfig.key === 'id' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '⇅'}</th>
+                  <th className="px-6 py-4 font-medium text-slate-500 text-[14px]">ประเภท</th>
+                  <th onClick={() => requestSort('title')} className="px-6 py-4 font-medium text-slate-500 text-[14px] cursor-pointer hover:bg-slate-200 transition-colors select-none">รายการ/คำอธิบาย {sortConfig.key === 'title' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '⇅'}</th>
+                  <th onClick={() => requestSort('amount')} className="px-6 py-4 font-medium text-slate-500 text-[14px] text-right cursor-pointer hover:bg-slate-200 transition-colors select-none">ยอดเงิน (บาท) {sortConfig.key === 'amount' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '⇅'}</th>
+                  <th className="px-6 py-4 font-medium text-slate-500 text-[14px] text-right">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {isFetchingTable ? (
+                  Array(5).fill(0).map((_, i) => (
+                    <tr key={`skeleton-${i}`} className="animate-pulse">
+                      <td className="px-6 py-5"><div className="h-4 bg-slate-200 rounded w-24"></div></td>
+                      <td className="px-6 py-5"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
+                      <td className="px-6 py-5"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
+                      <td className="px-6 py-5"><div className="h-4 bg-slate-200 rounded w-32"></div></td>
+                      <td className="px-6 py-5"><div className="h-4 bg-slate-200 rounded w-20 ml-auto"></div></td>
+                      <td className="px-6 py-5 flex justify-end gap-1"><div className="h-8 bg-slate-200 rounded w-16"></div></td>
+                    </tr>
+                  ))
+                ) : (
+                  displayedData.map((r, index) => (
+                    <tr key={`${r.id}-${index}`} onClick={() => handleOpenModal(r)} className="hover:bg-slate-50/70 transition-colors cursor-pointer">
+                      <td className="px-6 py-4 text-[14px] text-slate-600">{formatDateTh(r.date)}</td>
+                      <td className="px-6 py-4 font-mono-code text-[15px] font-bold text-sky-500">{r.id || '-'}</td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[13px] font-bold
+                          ${r.type === 'EXPENSE' ? 'bg-sky-50 text-sky-600' : 'bg-emerald-50 text-emerald-600'}
+                        `}>
+                          {r.type === 'EXPENSE' ? <ArrowDownCircle className="w-3.5 h-3.5" /> : <ArrowUpCircle className="w-3.5 h-3.5" />}
+                          {r.type === 'EXPENSE' ? 'จ่าย (Exp.)' : 'รับ (Rev.)'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-[15px] text-slate-800 font-medium">
+                        <div>{r.title}</div>
+                        <div className="text-[12px] text-slate-400">{r.category}</div>
+                      </td>
+                      <td className="px-6 py-4 text-[16px] font-mono-code font-bold text-slate-800 text-right">
+                        {r.amount.toLocaleString()}
+                      </td>
+                      <td className="px-6 py-4 flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                        {!r.isBill && <button onClick={(e) => { e.stopPropagation(); handleOpenModal(r); }} className="p-2 text-slate-400 hover:text-amber-500 hover:bg-amber-50 rounded-[12px] transition-colors"><Edit className="w-[18px] h-[18px]" /></button>}
+                        {!r.isBill && <button onClick={(e) => { e.stopPropagation(); setConfirmDelete({ isOpen: true, id: r.id }); }} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-[12px] transition-colors"><Trash2 className="w-[18px] h-[18px]" /></button>}
+                        {r.isBill && <span className="text-[12px] text-slate-400 px-2 py-1 bg-slate-100 rounded-md">ผูกกับบิล</span>}
+                      </td>
+                    </tr>
+                  ))
+                )}
+                {/* Infinity Loading Skeleton (Desktop) */}
+                {isLoadingMore && Array.from({ length: 2 }).map((_, i) => (
+                  <tr key={`skel-fin-more-${i}`} className="border-b border-slate-50">
+                    <td className="px-6 py-4"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div></td>
+                    <td className="px-6 py-4"><div className="h-4 w-20 bg-slate-200 rounded animate-pulse"></div></td>
+                    <td className="px-6 py-4"><div className="h-6 w-24 bg-slate-200 rounded-full animate-pulse"></div></td>
+                    <td className="px-6 py-4"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div></td>
+                    <td className="px-6 py-4"><div className="h-4 w-20 bg-slate-200 rounded animate-pulse ml-auto"></div></td>
+                    <td className="px-6 py-4 flex justify-end gap-1"><div className="h-8 w-16 bg-slate-200 rounded-lg animate-pulse"></div></td>
+                  </tr>
+                ))}
+                {!isFetchingTable && displayedData.length === 0 && (
+                  <tr><td colSpan="6" className="text-center p-12 text-slate-400 text-[15px]">ไม่พบข้อมูลการเงิน</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <MobileCardView 
+            isLoadingMore={isLoadingMore}
+            isLoading={isFetchingTable} data={displayedData}
+            keyField="id"
+            onClick={(r) => handleOpenModal(r)}
+            emptyText="ไม่พบข้อมูลการเงิน"
+            renderHeader={(r) => (
+              <>
+                <div className="flex items-center gap-2.5">
+                  <span className="font-black text-sky-600 text-[15px] font-mono-code tracking-wide">{r.id || '-'}</span>
+                  <span className={`px-2 py-0.5 rounded-md text-[12px] font-bold whitespace-nowrap border shadow-sm px-2.5 py-1 ${r.type === 'EXPENSE' ? 'bg-sky-50 text-sky-600 border-sky-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
+                    {r.type === 'EXPENSE' ? 'จ่าย (Exp.)' : 'รับ (Rev.)'}
+                  </span>
+                </div>
+                <div className="text-right whitespace-nowrap shrink-0 ml-2">
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[12px] font-bold border bg-slate-50 text-slate-600 border-slate-200 shadow-sm">
+                    {formatDateTh(r.date)}
+                  </span>
+                </div>
+              </>
+            )}
+            renderTitle={(r) => (
+              <h4 className="font-bold text-slate-800 text-[16px] leading-tight truncate">{r.title}</h4>
+            )}
+            renderFields={(r) => {
+              return [
+                {
+                  icon: <DollarSign className="w-3.5 h-3.5" />,
+                  label: "ยอดเงิน",
+                  value: <span className="font-mono-code text-[15px] font-bold text-slate-800">{r.amount.toLocaleString()} บาท</span>
+                },
+                {
+                  icon: <FileText className="w-3.5 h-3.5" />,
+                  label: "หมวดหมู่",
+                  value: r.category
+                }
+              ];
+            }}
+            renderActions={(r) => (
+              <>
+                {!r.isBill && <button onClick={(e) => { e.stopPropagation(); setConfirmDelete({ isOpen: true, id: r.id }); }} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-xs"><Trash2 className="w-4 h-4" /> ลบ</button>}
+                {!r.isBill && <button onClick={(e) => { e.stopPropagation(); handleOpenModal(r); }} className="flex-1 flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-amber-600 bg-slate-50 hover:bg-amber-50 rounded-xl transition-colors font-medium text-xs"><Edit className="w-4 h-4" /> แก้ไข</button>}
+                {r.isBill && <span className="flex-1 py-2 text-center text-slate-400 text-xs font-medium bg-slate-50 rounded-xl">ทำรายการผ่านหน้าระบบบิล</span>}
+              </>
+            )}
+          />
+        </div>
+      </div>
+
+      {shouldRender && (
+        <div className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[120] flex items-center justify-center p-3 sm:p-4 font-body ${isClosing ? 'backdrop-animate-out' : 'backdrop-animate-in'}`}>
+          <div className={`bg-white w-full max-w-2xl shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[90vh] rounded-[20px] sm:rounded-[24px] overflow-hidden ${isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+            <div className="px-6 py-4 flex justify-between items-center bg-white border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-sky-500 text-white flex items-center justify-center"><DollarSign className="w-5 h-5" /></div>
+                <div>
+                  <h3 className="font-display text-[18px] font-bold text-slate-800 leading-tight">{editingId ? 'แก้ไขรายการ' : 'เพิ่มรายการใหม่'}</h3>
+                  <p className="font-mono-code text-[12px] text-slate-400 uppercase tracking-widest">FINANCE RECORD</p>
+                </div>
+              </div>
+              <button onClick={() => setIsModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 transition-colors"><X className="w-5 h-5" /></button>
+            </div>
+
+            <div className="p-4 sm:p-6 overflow-y-auto bg-slate-50/50 flex-1">
+              <form id="financeForm" onSubmit={handleSave} className="bg-white border border-slate-200/60 rounded-[20px] p-4 sm:p-6 shadow-sm flex flex-col gap-5">
+                
+                <div className="flex gap-4">
+                  <button type="button" onClick={() => setFormData({...formData, type: 'EXPENSE'})}
+                    className={`flex-1 py-3 sm:py-4 rounded-[16px] border-2 flex flex-col items-center justify-center gap-1 sm:gap-2 transition-all ${formData.type === 'EXPENSE' ? 'border-sky-500 bg-sky-50 text-sky-600 shadow-sm' : 'border-slate-100 bg-white text-slate-400 hover:border-slate-200'}`}>
+                    <ArrowDownCircle className={`w-6 h-6 sm:w-8 sm:h-8 ${formData.type === 'EXPENSE' ? 'text-sky-500' : 'text-slate-300'}`} />
+                    <span className="font-bold text-[14px] sm:text-[16px]">รายจ่าย</span>
+                  </button>
+                  <button type="button" onClick={() => setFormData({...formData, type: 'INCOME'})}
+                    className={`flex-1 py-3 sm:py-4 rounded-[16px] border-2 flex flex-col items-center justify-center gap-1 sm:gap-2 transition-all ${formData.type === 'INCOME' ? 'border-emerald-500 bg-emerald-50 text-emerald-600 shadow-sm' : 'border-slate-100 bg-white text-slate-400 hover:border-slate-200'}`}>
+                    <ArrowUpCircle className={`w-6 h-6 sm:w-8 sm:h-8 ${formData.type === 'INCOME' ? 'text-emerald-500' : 'text-slate-300'}`} />
+                    <span className="font-bold text-[14px] sm:text-[16px]">รายรับ</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+                  <div className="space-y-1.5">
+                    <label className="text-[13px] font-medium text-slate-600">วันที่ทำรายการ <span className="text-rose-500">*</span></label>
+                    <input type="datetime-local" step="1" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="w-full h-[44px] px-4 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all" required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[13px] font-medium text-slate-600">เลขที่เอกสาร (Doc No.)</label>
+                    <input type="text" value={formData.id === 'AUTO' ? '' : formData.id} onChange={(e) => setFormData({...formData, id: e.target.value})} placeholder="ปล่อยว่างเพื่อสร้างอัตโนมัติ" className="w-full h-[44px] px-4 bg-slate-50 border border-slate-200 rounded-[12px] text-[14px] text-slate-700 font-mono-code font-bold outline-none focus:border-sky-500 transition-all" />
+                  </div>
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-[13px] font-medium text-slate-600">หมวดหมู่ <span className="text-rose-500">*</span></label>
+                    <input type="text" value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} placeholder="เช่น ค่าน้ำ, ค่าไฟ, เงินเดือน" className="w-full h-[44px] px-4 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all" required />
+                  </div>
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-[13px] font-medium text-slate-600">รายการ/คำอธิบาย <span className="text-rose-500">*</span></label>
+                    <input type="text" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} placeholder="รายละเอียดรายการ" className="w-full h-[44px] px-4 bg-white border border-slate-200 rounded-[12px] text-[14px] text-slate-700 outline-none focus:border-sky-500 transition-all" required />
+                  </div>
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-[13px] font-medium text-slate-600">ยอดเงิน (บาท) <span className="text-rose-500">*</span></label>
+                    <input type="number" step="0.01" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} placeholder="0.00" className="w-full h-[48px] px-4 bg-white border border-slate-200 rounded-[12px] text-[18px] font-bold font-mono-code text-slate-800 outline-none focus:border-sky-500 transition-all" required />
+                  </div>
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-[13px] font-medium text-slate-600">หมายเหตุ</label>
+                    <textarea value={formData.note} onChange={(e) => setFormData({...formData, note: e.target.value})} placeholder="ใส่หมายเหตุเพิ่มเติม (ถ้ามี)" className="w-full h-[80px] p-4 bg-white border border-slate-200 rounded-[12px] text-[14px] outline-none resize-none focus:border-sky-500 transition-all"></textarea>
+                  </div>
+                </div>
+              </form>
+            </div>
+            
+            <div className="p-4 sm:p-6 bg-white border-t border-slate-100 shrink-0 flex justify-end gap-3">
+              <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 rounded-xl font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors">ยกเลิก</button>
+              <button type="submit" form="financeForm" className="px-8 py-3 rounded-xl font-bold text-white bg-sky-500 hover:bg-sky-600 shadow-lg shadow-sky-500/30 transition-all active:scale-95 flex items-center gap-2">
+                <Save className="w-5 h-5" /> บันทึกข้อมูล
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ConfirmAlert isOpen={confirmDelete.isOpen} title="ยืนยันการลบรายการ" text="คุณแน่ใจหรือไม่ว่าต้องการลบรายการการเงินนี้? การกระทำนี้ไม่สามารถย้อนกลับได้" onConfirm={executeDelete} onCancel={() => setConfirmDelete({ isOpen: false, id: null })} />
+    </div>
+  );
+}
