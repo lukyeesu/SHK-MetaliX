@@ -309,7 +309,12 @@ const useStickyScroll = (headerRef, filterRef) => {
       const headerRect = headerRef.current.getBoundingClientRect();
       const filterRect = filterRef.current.getBoundingClientRect();
       
-      if (filterRect.top <= headerRect.bottom + 5) {
+      let effectiveHeaderBottom = headerRect.bottom;
+      if (window.innerWidth < 768 && document.body.classList.contains('hide-mobile-bars')) {
+          effectiveHeaderBottom += 56;
+      }
+      
+      if (filterRect.top <= effectiveHeaderBottom + 5) {
           filterRef.current.classList.add('is-scrolled');
       } else {
           filterRef.current.classList.remove('is-scrolled');
@@ -1149,8 +1154,10 @@ export default function App() {
           transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
-        body.hide-mobile-bars .sticky-header-module,
-        body.hide-mobile-bars .sticky-filter-module {
+        body.hide-mobile-bars .sticky-header-module {
+          transform: translateY(-56px);
+        }
+        body.hide-mobile-bars .sticky-filter-module.is-scrolled {
           transform: translateY(-56px);
         }
 
@@ -5325,7 +5332,8 @@ function FinanceModule({ setIsLoading, setLoadingMsg, addToast, requestAPI, fina
 
     const payload = { ...formData, _editingId: editingId };
     if (!editingId && (!payload.id || payload.id === 'AUTO')) {
-      payload.id = generateDocId('FIN', financeData || [], payload.date);
+      const prefix = formData.type === 'EXPENSE' ? 'FINe' : 'FINr';
+      payload.id = generateDocId(prefix, financeData || [], payload.date);
     }
     
     const response = await requestAPI('SAVE_DATA', 'Finance', payload);
